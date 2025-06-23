@@ -8,15 +8,55 @@ datasource db {
 }
 
 model User {
-    id        String   @id @default(uuid())
-    email     String   @unique
-    createdAt DateTime @default(now())
-    bots      Bot[]
+    id         String      @id @default(uuid())
+    email      String      @unique
+    clerkId    String?     @unique
+    createdAt  DateTime    @default(now())
+    bots       Bot[]
+    strategies Strategy[]
+    portfolios Portfolio[]
 }
 
 model Bot {
+    id         String    @id @default(uuid())
+    name       String
+    isActive   Boolean   @default(false)
+    owner      User      @relation(fields: [ownerId], references: [id])
+    ownerId    String
+    strategy   Strategy? @relation(fields: [strategyId], references: [id])
+    strategyId String?
+    createdAt  DateTime  @default(now())
+    trades     Trade[]
+}
+
+model Strategy {
+    id          String   @id @default(uuid())
+    name        String
+    description String?
+    rules       Json
+    owner       User     @relation(fields: [ownerId], references: [id])
+    ownerId     String
+    createdAt   DateTime @default(now())
+    bots        Bot[]
+}
+
+model Trade {
+    id        String    @id @default(uuid())
+    symbol    String
+    side      String // "buy" or "sell"
+    quantity  Float
+    price     Float
+    status    String    @default("pending")
+    bot       Bot       @relation(fields: [botId], references: [id])
+    botId     String
+    createdAt DateTime  @default(now())
+    closedAt  DateTime?
+}
+
+model Portfolio {
     id        String   @id @default(uuid())
-    name      String
+    name      String   @default("Main Portfolio")
+    balance   Float    @default(0)
     owner     User     @relation(fields: [ownerId], references: [id])
     ownerId   String
     createdAt DateTime @default(now())

@@ -42,5 +42,14 @@ services:
     depends_on:
       - backend
 
+  chart-engine:
+    build:
+      context: ./chart-engine
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./chart-engine:/app
+
 volumes:
   db-data:

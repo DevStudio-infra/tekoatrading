@@ -1,7 +1,9 @@
 import express from "express";
 import dotenv from "dotenv";
+import cors from "cors";
 import * as trpcExpress from "@trpc/server/adapters/express";
-import { appRouter } from "./routers/root";
+import { appRouter, createContext } from "./routers/root";
+import { logger } from "./logger";
 
 dotenv.config();
 
@@ -9,15 +11,21 @@ const PORT = process.env.PORT ? Number(process.env.PORT) : 4000;
 
 const app = express();
 
+app.use(cors());
+app.use(express.json());
+
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
 });
 
-app.use("/trpc", trpcExpress.createExpressMiddleware({
-  router: appRouter,
-}));
+app.use(
+  "/trpc",
+  trpcExpress.createExpressMiddleware({
+    router: appRouter,
+    createContext,
+  }),
+);
 
 app.listen(PORT, () => {
-  // eslint-disable-next-line no-console
-  console.log(`Backend server running on port ${PORT}`);
+  logger.info(`Backend server running on port ${PORT}`);
 });
