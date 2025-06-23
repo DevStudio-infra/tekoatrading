@@ -2,6 +2,7 @@ import { router, publicProcedure, createContext } from "../trpc";
 import { usersRouter } from "./users";
 import { botsRouter } from "./bots";
 import { strategiesRouter } from "./strategies";
+import { aiRouter } from "./ai";
 
 export { createContext };
 
@@ -13,6 +14,7 @@ export const appRouter = router({
   users: usersRouter,
   bots: botsRouter,
   strategies: strategiesRouter,
+  ai: aiRouter,
 });
 
 export type AppRouter = typeof appRouter;
