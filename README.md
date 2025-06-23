@@ -1,261 +1,301 @@
-# Tekoa Trading - AI-Powered Trading Platform
+# Tekoa Trading Platform
 
-A next-generation trading platform that combines artificial intelligence, automated trading bots, and advanced technical analysis to provide intelligent trading solutions.
+A sophisticated, AI-powered trading platform built with modern technologies for automated forex and cryptocurrency trading.
 
 ## 🚀 Features
 
-- **AI-Powered Analysis**: Advanced machine learning algorithms for market analysis
-- **Automated Trading Bots**: Create and manage sophisticated trading bots
-- **Strategy Management**: Design custom trading strategies with technical indicators
-- **Portfolio Management**: Real-time portfolio tracking and P&L analysis
-- **Interactive Charts**: Professional trading charts with technical indicators
-- **Risk Management**: Built-in risk assessment and position sizing
-- **Real-time Data**: Live market data integration
+### Core Trading Features
+
+- **Real-time Market Data**: Live price feeds with WebSocket connections
+- **AI-Powered Trading Bots**: Intelligent automated trading with machine learning
+- **Advanced Risk Management**: Sophisticated position sizing and risk controls
+- **Multi-Broker Integration**: Support for Capital.com and extensible to other brokers
+- **Real-time Portfolio Tracking**: Live P&L monitoring and performance analytics
+
+### Platform Capabilities
+
+- **Professional Trading Dashboard**: Real-time overview with market data and bot status
+- **Comprehensive Bot Management**: Full CRUD operations for trading bots
+- **Strategy Development**: Create and backtest custom trading strategies
+- **Advanced Charts**: Technical analysis with multiple indicators and timeframes
+- **Portfolio Analytics**: Detailed performance tracking and trade history
+
+### Technical Infrastructure
+
+- **Modern Tech Stack**: Next.js 14, TypeScript, tRPC, Prisma, PostgreSQL
+- **Real-time Communication**: WebSocket integration for live data
+- **AI Integration**: LangChain with Google Gemini for intelligent analysis
+- **Production-Ready**: Scalable architecture with comprehensive error handling
 
 ## 🏗️ Architecture
 
-### Monorepo Structure
+### Backend Services
 
-```
-tekoa-trading/
-├── backend/          # Node.js + TypeScript + tRPC + Prisma
-├── frontend/         # Next.js 14 + TypeScript + Tailwind CSS
-├── chart-engine/     # Python FastAPI + TA-Lib + mplfinance
-└── docker-compose.yml
-```
+- **BrokerIntegrationService**: Real trading execution and position management
+- **BotEvaluationService**: AI-powered trade analysis and execution
+- **MarketDataService**: Real-time price monitoring and data feeds
+- **WebSocketService**: Live communication and notifications
 
-### Technology Stack
+### Database Schema
 
-**Backend:**
+- **Enhanced Prisma Models**: 10+ sophisticated models with relationships
+- **Comprehensive Entities**: Users, Bots, Strategies, Trades, Positions, Evaluations
+- **Performance Tracking**: Detailed metrics and analytics storage
 
-- Node.js + TypeScript
-- tRPC for type-safe APIs
-- Prisma ORM with PostgreSQL
-- LangChain + Google Gemini for AI agents
-- Winston for logging
+### Frontend Components
 
-**Frontend:**
+- **TradingDashboard**: Real-time overview with live data simulation
+- **Bot Management**: Comprehensive CRUD with performance metrics
+- **Portfolio Tracker**: Multi-tab interface with positions and trade history
+- **Strategy Builder**: Advanced strategy creation with risk management
+- **Chart Analysis**: Professional charting with technical indicators
 
-- Next.js 14 with App Router
-- TypeScript + Tailwind CSS
-- tRPC client for API calls
-- React Query for state management
+## 🛠️ Technology Stack
 
-**Chart Engine:**
+### Backend
 
-- Python FastAPI
-- TA-Lib for technical indicators
-- mplfinance for chart generation
-- yfinance for market data
+- **Runtime**: Node.js with TypeScript
+- **Framework**: tRPC for type-safe APIs
+- **Database**: PostgreSQL with Prisma ORM
+- **AI**: LangChain + Google Gemini
+- **Real-time**: Socket.io + WebSocket
+- **Trading**: Capital.com API integration
 
-**Infrastructure:**
+### Frontend
 
-- Docker Compose for development
-- PostgreSQL database
-- ESLint + Prettier for code quality
+- **Framework**: Next.js 14 with TypeScript
+- **Styling**: Tailwind CSS
+- **State Management**: tRPC React Query
+- **UI Components**: Custom responsive components
+- **Real-time**: WebSocket client integration
 
-## 🛠️ Installation & Setup
+### Infrastructure
+
+- **Database**: PostgreSQL
+- **Containerization**: Docker support
+- **Version Control**: Git with GitHub
+- **Package Management**: npm
+
+## 📦 Installation & Setup
 
 ### Prerequisites
 
 - Node.js 18+
-- Python 3.11+
-- Docker & Docker Compose
-- PostgreSQL (or use Docker)
+- PostgreSQL database
+- Capital.com API credentials (for live trading)
+- Google Gemini API key (for AI features)
 
 ### Quick Start
 
-1. **Clone the repository**
+1. **Clone the Repository**
 
    ```bash
    git clone https://github.com/RaphaelMalburg/TekoaTrading.git
-   cd TekoaTrading
+   cd tekoa-trading
    ```
 
-2. **Install dependencies**
+2. **Install Dependencies**
 
    ```bash
    npm install
    ```
 
-3. **Set up environment variables**
+3. **Environment Setup**
 
    ```bash
-   # Backend
-   cp backend/.env.example backend/.env
-   # Edit backend/.env with your configuration
+   # Backend (.env)
+   DATABASE_URL="postgresql://user:password@localhost:5432/tekoa_trading"
+   GOOGLE_GEMINI_API_KEY="your_gemini_api_key"
+   CAPITAL_API_KEY="your_capital_api_key"
+   CAPITAL_IDENTIFIER="your_capital_identifier"
+   CAPITAL_PASSWORD="your_capital_password"
+
+   # Frontend (.env.local)
+   NEXT_PUBLIC_API_URL="http://localhost:3001"
    ```
 
-4. **Start with Docker Compose**
-
-   ```bash
-   docker-compose up -d
-   ```
-
-5. **Initialize database**
+4. **Database Setup**
 
    ```bash
    cd backend
-   npm run db:push
-   npm run seed
+   npx prisma migrate dev
+   npx prisma db seed
    ```
 
-6. **Access the application**
-   - Frontend: http://localhost:3000
-   - Backend API: http://localhost:4000
-   - Chart Engine: http://localhost:8000
-
-### Manual Setup (Development)
-
-1. **Backend**
+5. **Start Development**
 
    ```bash
+   # Backend (Terminal 1)
    cd backend
-   npm install
    npm run dev
-   ```
 
-2. **Frontend**
-
-   ```bash
+   # Frontend (Terminal 2)
    cd frontend
-   npm install
    npm run dev
    ```
 
-3. **Chart Engine**
-   ```bash
-   cd chart-engine
-   pip install -r requirements.txt
-   python main.py
-   ```
+6. **Access the Platform**
+   - Frontend: http://localhost:3000
+   - Backend API: http://localhost:3001
+
+## 🎯 Usage Guide
+
+### 1. Dashboard Overview
+
+- Monitor real-time market data and portfolio performance
+- Track active trading bots and their status
+- View live P&L and position updates
+
+### 2. Bot Management
+
+- Create sophisticated trading bots with custom parameters
+- Configure risk management settings
+- Enable AI-powered trading decisions
+- Monitor bot performance and metrics
+
+### 3. Strategy Development
+
+- Build custom trading strategies with multiple indicators
+- Set entry and exit conditions
+- Configure risk-reward ratios
+- Backtest strategy performance
+
+### 4. Portfolio Tracking
+
+- Monitor all positions and trades in real-time
+- Analyze performance across different timeframes
+- Track win rates and profitability metrics
+
+### 5. Chart Analysis
+
+- Access professional charting tools
+- Apply technical indicators and overlays
+- Save and manage chart configurations
+- Perform detailed technical analysis
 
 ## 🔧 Configuration
 
-### Environment Variables
+### Trading Bot Configuration
 
-**Backend (.env)**
-
-```env
-DATABASE_URL=postgresql://tekoa:tekoa@localhost:5432/tekoa
-PORT=4000
-NODE_ENV=development
-GOOGLE_API_KEY=your_google_api_key_here
-CHART_ENGINE_URL=http://localhost:8000
+```typescript
+{
+  name: "EUR Scalper",
+  tradingPairSymbol: "EURUSD",
+  timeframe: "M15",
+  maxPositionSize: 1000,
+  riskPercentage: 2,
+  isAiTradingActive: true
+}
 ```
 
-### Database Schema
+### Strategy Configuration
 
-The application uses Prisma with the following main models:
+```typescript
+{
+  name: "Trend Following Strategy",
+  type: "trend_following",
+  timeframe: "H4",
+  maxRisk: 3,
+  stopLoss: 2,
+  takeProfit: 6,
+  indicators: ["SMA", "ADX", "Bollinger"]
+}
+```
 
-- **User**: User accounts and authentication
-- **Portfolio**: User portfolios and balances
-- **Bot**: Automated trading bots
-- **Strategy**: Trading strategies and rules
-- **Trade**: Individual trade records
+## 📊 Performance Features
 
-## 🤖 AI Trading Agents
+### Real-time Metrics
 
-The platform includes several AI agents powered by Google Gemini:
+- Live P&L tracking
+- Position monitoring
+- Win rate calculations
+- Risk exposure analysis
 
-1. **Technical Analysis Agent**: Analyzes market data and provides trading signals
-2. **Risk Assessment Agent**: Evaluates trade risk and position sizing
-3. **Trading Decision Agent**: Makes final trading decisions based on all inputs
+### Analytics Dashboard
 
-## 📊 API Endpoints
+- Performance over time
+- Strategy effectiveness
+- Bot comparison metrics
+- Market correlation analysis
 
-### tRPC Routers
+## 🔐 Security & Risk Management
 
-- **users**: User management and profiles
-- **bots**: Trading bot CRUD operations
-- **strategies**: Strategy management
-- **ai**: AI analysis and trading decisions
+### Built-in Safety Features
 
-### Chart Engine API
+- Position size limits
+- Maximum risk per trade
+- Stop-loss enforcement
+- Account balance protection
 
-- `POST /generate-chart`: Generate trading charts with indicators
-- `POST /calculate-indicator`: Calculate technical indicators
-- `GET /supported-indicators`: List available indicators
+### API Security
 
-## 🚀 Usage
+- Secure credential storage
+- Encrypted communications
+- Rate limiting protection
+- Error handling and recovery
 
-### Creating a Trading Bot
+## 🚀 Deployment
 
-1. Navigate to the "Trading Bots" page
-2. Click "Create New Bot"
-3. Configure bot settings and assign a strategy
-4. Activate the bot to start automated trading
+### Production Deployment
 
-### Designing Strategies
+1. Set up PostgreSQL database
+2. Configure environment variables
+3. Build and deploy backend service
+4. Build and deploy frontend application
+5. Set up monitoring and logging
 
-1. Go to "Strategies" page
-2. Click "Create New Strategy"
-3. Set risk parameters (max risk, stop loss, take profit)
-4. Select technical indicators
-5. Save and assign to bots
-
-### Viewing Charts
-
-1. Visit the "Charts" page
-2. Enter a symbol (e.g., AAPL, TSLA)
-3. Select timeframe and period
-4. Add technical indicators
-5. Generate chart for analysis
-
-## 🧪 Testing
+### Docker Deployment
 
 ```bash
-# Run backend tests
-cd backend
-npm test
-
-# Run frontend tests
-cd frontend
-npm test
-
-# Test chart engine
-cd chart-engine
-python -m pytest
+docker-compose up -d
 ```
 
-## 📈 Performance
+## 📈 Roadmap
 
-- **Backend**: Handles 1000+ concurrent requests
-- **Chart Engine**: Generates charts in <2 seconds
-- **AI Analysis**: Decision making in <5 seconds
-- **Real-time Updates**: WebSocket support for live data
+### Planned Features
 
-## 🔐 Security
+- [ ] Advanced backtesting engine
+- [ ] Multi-broker support expansion
+- [ ] Mobile application
+- [ ] Social trading features
+- [ ] Advanced AI models
+- [ ] Webhook integrations
 
-- Input validation with Zod schemas
-- SQL injection protection via Prisma
-- Rate limiting on API endpoints
-- Secure environment variable management
+### Current Status
+
+- ✅ Core trading infrastructure
+- ✅ AI-powered bot evaluation
+- ✅ Real-time market data
+- ✅ Comprehensive frontend
+- ✅ Portfolio management
+- ✅ Strategy development tools
 
 ## 🤝 Contributing
 
 1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+2. Create a feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
 
-## 📝 License
+## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## 🆘 Support
 
-For support, email support@tekoa.ai or create an issue on GitHub.
+For support and questions:
+
+- Create an issue on GitHub
+- Check the documentation
+- Review the code examples
 
 ## 🙏 Acknowledgments
 
-- [Next.js](https://nextjs.org/) for the frontend framework
-- [tRPC](https://trpc.io/) for type-safe APIs
-- [Prisma](https://prisma.io/) for database management
-- [LangChain](https://langchain.com/) for AI agent framework
-- [TA-Lib](https://ta-lib.org/) for technical analysis
+- Capital.com for trading API
+- Google Gemini for AI capabilities
+- Open source community for tools and libraries
 
 ---
 
-**Built with ❤️ by the Tekoa Trading Team**
+**Disclaimer**: This software is for educational and research purposes. Trading involves substantial risk of loss. Use at your own risk and never trade with money you cannot afford to lose.
