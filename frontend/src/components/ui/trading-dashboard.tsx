@@ -1,37 +1,28 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useUser } from "@clerk/nextjs";
+import { getCurrentUserId } from "../../lib/dev-auth";
 import { trpc } from "../../lib/trpc";
 
-interface Bot {
-  id: string;
-  name: string;
-  status: "active" | "paused" | "stopped";
-  profit: number;
-  trades: number;
-  winRate: number;
-}
-
-interface Position {
-  id: string;
-  symbol: string;
-  type: "BUY" | "SELL";
-  size: number;
-  pnl: number;
-  openTime: string;
-}
-
 export function TradingDashboard() {
+  // Get user from Clerk or use dev user in development
+  const { user } = useUser();
+  const userId = user?.id || getCurrentUserId();
+
   // tRPC queries
-  const { data: bots, isLoading: botsLoading, error: botsError } = trpc.bots.getAll.useQuery();
-  const { data: strategies, isLoading: strategiesLoading } = trpc.strategies.getAll.useQuery();
+  const {
+    data: bots,
+    isLoading: botsLoading,
+    error: botsError,
+  } = trpc.bots.getAll.useQuery({ userId });
 
   // Mock data for positions and market data until we implement these endpoints
-  const [positions] = useState<Position[]>([
+  const [positions] = useState([
     {
       id: "1",
       symbol: "EURUSD",
-      type: "BUY",
+      type: "BUY" as const,
       size: 1.0,
       pnl: 250.0,
       openTime: new Date().toISOString(),
@@ -39,7 +30,7 @@ export function TradingDashboard() {
     {
       id: "2",
       symbol: "GBPUSD",
-      type: "SELL",
+      type: "SELL" as const,
       size: 0.5,
       pnl: 125.0,
       openTime: new Date().toISOString(),
@@ -47,7 +38,7 @@ export function TradingDashboard() {
     {
       id: "3",
       symbol: "USDJPY",
-      type: "BUY",
+      type: "BUY" as const,
       size: 0.8,
       pnl: -75.5,
       openTime: new Date().toISOString(),
@@ -87,12 +78,25 @@ export function TradingDashboard() {
   }, []);
 
   // Calculate stats from real data
-  const activeBots = bots?.filter((bot) => bot.isActive) || [];
-  const totalProfit = bots?.reduce((sum, bot) => sum + (bot.profit || 0), 0) || 0;
+  const activeBots = bots?.filter((bot: any) => bot.isActive) || [];
+  const totalProfit =
+    bots?.reduce((sum: number, bot: any) => sum + (bot.metrics?.totalPnL || 0), 0) || 0;
   const totalTrades = bots?.length || 0;
 
+  // Show loading state if user is not available yet
+  if (!userId) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-8 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading user data...</p>
+        </div>
+      </div>
+    );
+  }
+
   // Handle loading and error states
-  if (botsLoading || strategiesLoading) {
+  if (botsLoading) {
     return (
       <div className="min-h-screen bg-gray-50 p-8 flex items-center justify-center">
         <div className="text-center">
@@ -109,6 +113,7 @@ export function TradingDashboard() {
         <div className="text-center">
           <div className="text-red-600 text-xl mb-4">⚠️ Error loading dashboard</div>
           <p className="text-gray-600">Please check if the backend server is running</p>
+          <p className="text-sm text-gray-500 mt-2">Error: {botsError.message}</p>
           <button
             onClick={() => window.location.reload()}
             className="mt-4 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
@@ -121,9 +126,16 @@ export function TradingDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
+    <div className="min-h-screen bg-gray-50 p-8 pb-32">
       <div className="max-w-7xl mx-auto">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">Trading Dashboard</h1>
+        <div className="flex items-center justify-between mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">Trading Dashboard</h1>
+          {user && (
+            <div className="text-sm text-gray-600">
+              Welcome back, {user.firstName || user.emailAddresses[0]?.emailAddress || "Trader"}!
+            </div>
+          )}
+        </div>
 
         {/* Key Metrics */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -203,7 +215,7 @@ export function TradingDashboard() {
 
             <div className="space-y-4">
               {bots && bots.length > 0 ? (
-                bots.map((bot) => (
+                bots.map((bot: any) => (
                   <div
                     key={bot.id}
                     className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"
@@ -216,15 +228,15 @@ export function TradingDashboard() {
                       ></div>
                       <div>
                         <h3 className="font-medium text-gray-900">{bot.name}</h3>
-                        <p className="text-sm text-gray-600">Strategy: {bot.strategy}</p>
+                        <p className="text-sm text-gray-600">Symbol: {bot.tradingPairSymbol}</p>
                       </div>
                     </div>
 
                     <div className="text-right">
                       <p
-                        className={`font-medium ${(bot.profit || 0) >= 0 ? "text-green-600" : "text-red-600"}`}
+                        className={`font-medium ${(bot.metrics?.totalPnL || 0) >= 0 ? "text-green-600" : "text-red-600"}`}
                       >
-                        ${(bot.profit || 0).toFixed(2)}
+                        ${(bot.metrics?.totalPnL || 0).toFixed(2)}
                       </p>
                       <p className="text-sm text-gray-600">P&L</p>
                     </div>

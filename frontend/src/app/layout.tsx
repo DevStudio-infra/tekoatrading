@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
-import "./globals.css";
-import { TrpcProvider } from "./providers";
+import "../globals.css";
+import { Providers } from "./providers";
 import Navigation from "../components/ui/navigation";
+import { FloatingDockNav } from "../components/ui/floating-dock-nav";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -15,10 +16,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className={inter.className}>
-        <TrpcProvider>
+        <Providers>
           <Navigation />
-          <main>{children}</main>
-        </TrpcProvider>
+          <main className="min-h-screen">{children}</main>
+          <FloatingDockNav />
+        </Providers>
       </body>
     </html>
   );

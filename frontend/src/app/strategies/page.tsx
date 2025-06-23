@@ -1,124 +1,60 @@
 "use client";
 
 import { useState } from "react";
+import { useUser } from "@clerk/nextjs";
+import { getCurrentUserId } from "../../lib/dev-auth";
 import { trpc } from "../../lib/trpc";
 
-interface Strategy {
-  id: string;
-  name: string;
-  type: string;
-  description: string;
-  riskLevel: "LOW" | "MEDIUM" | "HIGH";
-  expectedReturn?: number;
-  isActive: boolean;
-  createdAt: string;
-}
-
 export default function StrategiesPage() {
+  // Get user from Clerk or use dev user in development
+  const { user } = useUser();
+  const userId = user?.id || getCurrentUserId();
+
+  const [isCreating, setIsCreating] = useState(false);
+  const [selectedStrategy, setSelectedStrategy] = useState<any>(null);
+
   // tRPC queries and mutations
-  const { data: strategies, isLoading, error, refetch } = trpc.strategies.getAll.useQuery();
-  const createStrategyMutation = trpc.strategies.create.useMutation({
+  const { data: strategies, isLoading, error, refetch } = trpc.strategies.list.useQuery({ userId });
+  const createStrategy = trpc.strategies.create.useMutation({
     onSuccess: () => {
       refetch();
-      setShowCreateForm(false);
+      setIsCreating(false);
       setNewStrategy({
         name: "",
-        type: "scalping",
         description: "",
         riskLevel: "MEDIUM",
-        indicators: [],
-        timeframes: [],
-        symbols: [],
+        technicalIndicators: [],
       });
     },
   });
-  const updateStrategyMutation = trpc.strategies.update.useMutation({
+  const updateStrategy = trpc.strategies.update.useMutation({
     onSuccess: () => refetch(),
   });
-  const deleteStrategyMutation = trpc.strategies.delete.useMutation({
+  const deleteStrategy = trpc.strategies.delete.useMutation({
     onSuccess: () => refetch(),
   });
 
-  const [showCreateForm, setShowCreateForm] = useState(false);
-  const [newStrategy, setNewStrategy] = useState<{
-    name: string;
-    type: string;
-    description: string;
-    riskLevel: "LOW" | "MEDIUM" | "HIGH";
-    indicators: string[];
-    timeframes: string[];
-    symbols: string[];
-  }>({
+  const [newStrategy, setNewStrategy] = useState({
     name: "",
-    type: "scalping",
     description: "",
-    riskLevel: "MEDIUM",
-    indicators: [],
-    timeframes: [],
-    symbols: [],
+    riskLevel: "MEDIUM" as "LOW" | "MEDIUM" | "HIGH",
+    technicalIndicators: [] as string[],
   });
 
-  const strategyTypes = [
-    { value: "scalping", label: "Scalping" },
-    { value: "swing", label: "Swing Trading" },
-    { value: "trend_following", label: "Trend Following" },
-    { value: "mean_reversion", label: "Mean Reversion" },
-    { value: "breakout", label: "Breakout" },
-  ];
+  const availableIndicators = ["SMA", "EMA", "RSI", "MACD", "Bollinger Bands", "Stochastic"];
 
-  const indicators = [
-    "RSI",
-    "MACD",
-    "Moving Average",
-    "Bollinger Bands",
-    "Stochastic",
-    "Williams %R",
-    "ADX",
-    "CCI",
-    "Fibonacci",
-    "Support/Resistance",
-  ];
+  // Show loading state if user is not available yet
+  if (!userId) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-8 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading user data...</p>
+        </div>
+      </div>
+    );
+  }
 
-  const handleCreateStrategy = () => {
-    if (!newStrategy.name.trim()) return;
-    createStrategyMutation.mutate({
-      name: newStrategy.name,
-      type: newStrategy.type,
-      description: newStrategy.description,
-      riskLevel: newStrategy.riskLevel,
-    });
-  };
-
-  const toggleStrategyStatus = (strategyId: string) => {
-    const strategy = strategies?.find((s) => s.id === strategyId);
-    if (strategy) {
-      updateStrategyMutation.mutate({
-        id: strategyId,
-        isActive: !strategy.isActive,
-      });
-    }
-  };
-
-  const handleDeleteStrategy = (strategyId: string) => {
-    if (confirm("Are you sure you want to delete this strategy?")) {
-      deleteStrategyMutation.mutate({ id: strategyId });
-    }
-  };
-
-  const getRiskColor = (risk: string) => {
-    switch (risk) {
-      case "LOW":
-        return "bg-green-100 text-green-800";
-      case "MEDIUM":
-        return "bg-yellow-100 text-yellow-800";
-      case "HIGH":
-        return "bg-red-100 text-red-800";
-      default:
-        return "bg-gray-100 text-gray-800";
-    }
-  };
-
-  // Handle loading state
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 p-8 flex items-center justify-center">
@@ -130,13 +66,13 @@ export default function StrategiesPage() {
     );
   }
 
-  // Handle error state
   if (error) {
     return (
       <div className="min-h-screen bg-gray-50 p-8 flex items-center justify-center">
         <div className="text-center">
           <div className="text-red-600 text-xl mb-4">⚠️ Error loading strategies</div>
           <p className="text-gray-600">Please check if the backend server is running</p>
+          <p className="text-sm text-gray-500 mt-2">Error: {error.message}</p>
           <button
             onClick={() => refetch()}
             className="mt-4 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
@@ -148,62 +84,165 @@ export default function StrategiesPage() {
     );
   }
 
+  const handleCreateStrategy = () => {
+    if (!newStrategy.name || !newStrategy.description) {
+      alert("Please fill in all required fields");
+      return;
+    }
+
+    createStrategy.mutate({
+      userId,
+      name: newStrategy.name,
+      description: newStrategy.description,
+      riskLevel: newStrategy.riskLevel,
+      technicalIndicators: newStrategy.technicalIndicators,
+    });
+  };
+
+  const handleToggleStrategy = (strategyId: string, isActive: boolean) => {
+    updateStrategy.mutate({
+      userId,
+      strategyId,
+      isActive: !isActive,
+    });
+  };
+
+  const handleDeleteStrategy = (strategyId: string) => {
+    if (confirm("Are you sure you want to delete this strategy?")) {
+      deleteStrategy.mutate({ userId, strategyId });
+    }
+  };
+
+  const toggleIndicator = (indicator: string) => {
+    setNewStrategy((prev) => ({
+      ...prev,
+      technicalIndicators: prev.technicalIndicators.includes(indicator)
+        ? prev.technicalIndicators.filter((i) => i !== indicator)
+        : [...prev.technicalIndicators, indicator],
+    }));
+  };
+
+  const getRiskLevelColor = (riskLevel: string) => {
+    switch (riskLevel) {
+      case "LOW":
+        return "text-green-600 bg-green-100";
+      case "MEDIUM":
+        return "text-yellow-600 bg-yellow-100";
+      case "HIGH":
+        return "text-red-600 bg-red-100";
+      default:
+        return "text-gray-600 bg-gray-100";
+    }
+  };
+
+  const activeStrategies = strategies?.filter((s: any) => s.isActive) || [];
+  const inactiveStrategies = strategies?.filter((s: any) => !s.isActive) || [];
+
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
+    <div className="min-h-screen bg-gray-50 p-8 pb-32">
       <div className="max-w-7xl mx-auto">
-        <div className="flex justify-between items-center mb-8">
+        <div className="flex items-center justify-between mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Trading Strategies</h1>
+          {user && (
+            <div className="text-sm text-gray-600">
+              Managing strategies for{" "}
+              {user.firstName || user.emailAddresses[0]?.emailAddress || "Trader"}
+            </div>
+          )}
+        </div>
+
+        {/* Strategy Statistics */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className="bg-white rounded-lg shadow-lg p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Total Strategies</p>
+                <p className="text-2xl font-bold text-gray-900">{strategies?.length || 0}</p>
+              </div>
+              <div className="p-3 rounded-full bg-blue-100">
+                <div className="w-6 h-6 bg-blue-600 rounded"></div>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow-lg p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Active Strategies</p>
+                <p className="text-2xl font-bold text-green-600">{activeStrategies.length}</p>
+              </div>
+              <div className="p-3 rounded-full bg-green-100">
+                <div className="w-6 h-6 bg-green-600 rounded"></div>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow-lg p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Inactive Strategies</p>
+                <p className="text-2xl font-bold text-gray-600">{inactiveStrategies.length}</p>
+              </div>
+              <div className="p-3 rounded-full bg-gray-100">
+                <div className="w-6 h-6 bg-gray-600 rounded"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Create Strategy Button */}
+        <div className="mb-6">
           <button
-            onClick={() => setShowCreateForm(true)}
-            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
+            onClick={() => setIsCreating(true)}
+            className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium"
           >
-            Create New Strategy
+            + Create New Strategy
           </button>
         </div>
 
         {/* Create Strategy Form */}
-        {showCreateForm && (
+        {isCreating && (
           <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
-            <h2 className="text-xl font-semibold mb-4">Create New Strategy</h2>
+            <h2 className="text-xl font-semibold mb-4">Create New Trading Strategy</h2>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-2">Strategy Name</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Strategy Name *
+                </label>
                 <input
                   type="text"
                   value={newStrategy.name}
-                  onChange={(e) => setNewStrategy((prev) => ({ ...prev, name: e.target.value }))}
-                  className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  onChange={(e) => setNewStrategy({ ...newStrategy, name: e.target.value })}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="Enter strategy name"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-2">Strategy Type</label>
-                <select
-                  value={newStrategy.type}
-                  onChange={(e) => setNewStrategy((prev) => ({ ...prev, type: e.target.value }))}
-                  className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  {strategyTypes.map((type) => (
-                    <option key={type.value} value={type.value}>
-                      {type.label}
-                    </option>
-                  ))}
-                </select>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Description *
+                </label>
+                <textarea
+                  value={newStrategy.description}
+                  onChange={(e) => setNewStrategy({ ...newStrategy, description: e.target.value })}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  rows={3}
+                  placeholder="Describe your trading strategy"
+                />
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-2">Risk Level</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Risk Level</label>
                 <select
                   value={newStrategy.riskLevel}
                   onChange={(e) =>
-                    setNewStrategy((prev) => ({
-                      ...prev,
+                    setNewStrategy({
+                      ...newStrategy,
                       riskLevel: e.target.value as "LOW" | "MEDIUM" | "HIGH",
-                    }))
+                    })
                   }
-                  className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value="LOW">Low Risk</option>
                   <option value="MEDIUM">Medium Risk</option>
@@ -212,59 +251,36 @@ export default function StrategiesPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-2">Technical Indicators</label>
-                <div className="max-h-32 overflow-y-auto border rounded-lg p-2">
-                  {indicators.map((indicator) => (
-                    <label key={indicator} className="flex items-center space-x-2 mb-1">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Technical Indicators
+                </label>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                  {availableIndicators.map((indicator) => (
+                    <label key={indicator} className="flex items-center space-x-2 cursor-pointer">
                       <input
                         type="checkbox"
-                        checked={newStrategy.indicators.includes(indicator)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setNewStrategy((prev) => ({
-                              ...prev,
-                              indicators: [...prev.indicators, indicator],
-                            }));
-                          } else {
-                            setNewStrategy((prev) => ({
-                              ...prev,
-                              indicators: prev.indicators.filter((i) => i !== indicator),
-                            }));
-                          }
-                        }}
-                        className="rounded"
+                        checked={newStrategy.technicalIndicators.includes(indicator)}
+                        onChange={() => toggleIndicator(indicator)}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                       />
-                      <span className="text-sm">{indicator}</span>
+                      <span className="text-sm text-gray-700">{indicator}</span>
                     </label>
                   ))}
                 </div>
               </div>
-
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium mb-2">Description</label>
-                <textarea
-                  value={newStrategy.description}
-                  onChange={(e) =>
-                    setNewStrategy((prev) => ({ ...prev, description: e.target.value }))
-                  }
-                  className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  rows={3}
-                  placeholder="Describe your trading strategy..."
-                />
-              </div>
             </div>
 
-            <div className="flex gap-4 mt-6">
+            <div className="flex space-x-4 mt-6">
               <button
                 onClick={handleCreateStrategy}
-                disabled={createStrategyMutation.isLoading}
-                className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={createStrategy.isLoading}
+                className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {createStrategyMutation.isLoading ? "Creating..." : "Create Strategy"}
+                {createStrategy.isLoading ? "Creating..." : "Create Strategy"}
               </button>
               <button
-                onClick={() => setShowCreateForm(false)}
-                className="bg-gray-600 text-white px-6 py-2 rounded-lg hover:bg-gray-700"
+                onClick={() => setIsCreating(false)}
+                className="bg-gray-300 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-400"
               >
                 Cancel
               </button>
@@ -272,87 +288,95 @@ export default function StrategiesPage() {
           </div>
         )}
 
-        {/* Strategies Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {/* Strategies List */}
+        <div className="bg-white rounded-lg shadow-lg">
+          <div className="p-6 border-b border-gray-200">
+            <h2 className="text-xl font-semibold">Your Trading Strategies</h2>
+          </div>
+
           {strategies && strategies.length > 0 ? (
-            strategies.map((strategy) => (
-              <div
-                key={strategy.id}
-                className="bg-white rounded-lg shadow-lg p-6 hover:shadow-xl transition-shadow"
-              >
-                <div className="flex justify-between items-start mb-4">
-                  <h3 className="text-lg font-semibold">{strategy.name}</h3>
-                  <div className="flex flex-col gap-2">
-                    <span
-                      className={`px-2 py-1 rounded-full text-xs font-medium ${getRiskColor(strategy.riskLevel)}`}
-                    >
-                      {strategy.riskLevel} RISK
-                    </span>
-                    <span
-                      className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        strategy.isActive
-                          ? "bg-green-100 text-green-800"
-                          : "bg-red-100 text-red-800"
-                      }`}
-                    >
-                      {strategy.isActive ? "Active" : "Inactive"}
-                    </span>
+            <div className="divide-y divide-gray-200">
+              {strategies.map((strategy: any) => (
+                <div key={strategy.id} className="p-6 hover:bg-gray-50 transition-colors">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-3 mb-2">
+                        <div
+                          className={`w-3 h-3 rounded-full ${
+                            strategy.isActive ? "bg-green-500" : "bg-gray-400"
+                          }`}
+                        ></div>
+                        <h3 className="text-lg font-medium text-gray-900">{strategy.name}</h3>
+                        <span
+                          className={`px-2 py-1 text-xs font-medium rounded-full ${getRiskLevelColor(strategy.riskLevel)}`}
+                        >
+                          {strategy.riskLevel} RISK
+                        </span>
+                      </div>
+
+                      <p className="text-gray-600 mb-3">{strategy.description}</p>
+
+                      {strategy.technicalIndicators && strategy.technicalIndicators.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mb-3">
+                          {strategy.technicalIndicators.map((indicator: string) => (
+                            <span
+                              key={indicator}
+                              className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full"
+                            >
+                              {indicator}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      <p className="text-xs text-gray-500">
+                        Created: {new Date(strategy.createdAt).toLocaleDateString()} • Updated:{" "}
+                        {new Date(strategy.updatedAt).toLocaleDateString()}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center space-x-2 ml-4">
+                      <button
+                        onClick={() => handleToggleStrategy(strategy.id, strategy.isActive)}
+                        disabled={updateStrategy.isLoading}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                          strategy.isActive
+                            ? "bg-red-100 text-red-700 hover:bg-red-200"
+                            : "bg-green-100 text-green-700 hover:bg-green-200"
+                        } disabled:opacity-50 disabled:cursor-not-allowed`}
+                      >
+                        {strategy.isActive ? "Deactivate" : "Activate"}
+                      </button>
+
+                      <button
+                        onClick={() => setSelectedStrategy(strategy)}
+                        className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 text-sm font-medium"
+                      >
+                        View Details
+                      </button>
+
+                      <button
+                        onClick={() => handleDeleteStrategy(strategy.id)}
+                        disabled={deleteStrategy.isLoading}
+                        className="px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </div>
                 </div>
-
-                <div className="space-y-3 mb-4">
-                  <p className="text-sm text-gray-600">
-                    Type: <span className="font-medium">{strategy.type}</span>
-                  </p>
-                  <p className="text-sm text-gray-600">
-                    Created:{" "}
-                    <span className="font-medium">
-                      {new Date(strategy.createdAt).toLocaleDateString()}
-                    </span>
-                  </p>
-                  {strategy.description && (
-                    <p className="text-sm text-gray-700 line-clamp-3">{strategy.description}</p>
-                  )}
-                  {strategy.expectedReturn && (
-                    <p className="text-sm font-medium text-blue-600">
-                      Expected Return: {strategy.expectedReturn.toFixed(1)}%
-                    </p>
-                  )}
-                </div>
-
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => toggleStrategyStatus(strategy.id)}
-                    disabled={updateStrategyMutation.isLoading}
-                    className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 ${
-                      strategy.isActive
-                        ? "bg-red-600 text-white hover:bg-red-700"
-                        : "bg-green-600 text-white hover:bg-green-700"
-                    }`}
-                  >
-                    {updateStrategyMutation.isLoading
-                      ? "..."
-                      : strategy.isActive
-                        ? "Deactivate"
-                        : "Activate"}
-                  </button>
-                  <button
-                    onClick={() => handleDeleteStrategy(strategy.id)}
-                    disabled={deleteStrategyMutation.isLoading}
-                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
-                  >
-                    {deleteStrategyMutation.isLoading ? "..." : "Delete"}
-                  </button>
-                </div>
-              </div>
-            ))
+              ))}
+            </div>
           ) : (
-            <div className="col-span-full text-center py-12">
+            <div className="p-12 text-center">
               <div className="text-gray-400 text-6xl mb-4">📈</div>
-              <p className="text-gray-500 mb-4">No trading strategies created yet.</p>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No strategies yet</h3>
+              <p className="text-gray-600 mb-6">
+                Create your first trading strategy to start automated trading
+              </p>
               <button
-                onClick={() => setShowCreateForm(true)}
-                className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
+                onClick={() => setIsCreating(true)}
+                className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium"
               >
                 Create Your First Strategy
               </button>
@@ -360,34 +384,69 @@ export default function StrategiesPage() {
           )}
         </div>
 
-        {/* Strategy Statistics */}
-        {strategies && strategies.length > 0 && (
-          <div className="mt-8 bg-white rounded-lg shadow-lg p-6">
-            <h2 className="text-xl font-semibold mb-4">Strategy Statistics</h2>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-              <div className="text-center">
-                <p className="text-2xl font-bold text-blue-600">{strategies.length}</p>
-                <p className="text-sm text-gray-600">Total Strategies</p>
+        {/* Strategy Details Modal */}
+        {selectedStrategy && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-semibold">Strategy Details: {selectedStrategy.name}</h2>
+                <button
+                  onClick={() => setSelectedStrategy(null)}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  ✕
+                </button>
               </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold text-green-600">
-                  {strategies.filter((strategy) => strategy.isActive).length}
-                </p>
-                <p className="text-sm text-gray-600">Active Strategies</p>
-              </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold text-gray-600">
-                  {new Set(strategies.map((strategy) => strategy.type)).size}
-                </p>
-                <p className="text-sm text-gray-600">Strategy Types</p>
-              </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold text-purple-600">
-                  {strategies.filter((s) => s.riskLevel === "LOW").length}L /{" "}
-                  {strategies.filter((s) => s.riskLevel === "MEDIUM").length}M /{" "}
-                  {strategies.filter((s) => s.riskLevel === "HIGH").length}H
-                </p>
-                <p className="text-sm text-gray-600">Risk Distribution</p>
+
+              <div className="space-y-4">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Status</p>
+                  <p
+                    className={`text-lg font-bold ${selectedStrategy.isActive ? "text-green-600" : "text-gray-600"}`}
+                  >
+                    {selectedStrategy.isActive ? "Active" : "Inactive"}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Risk Level</p>
+                  <span
+                    className={`inline-block px-3 py-1 text-sm font-medium rounded-full ${getRiskLevelColor(selectedStrategy.riskLevel)}`}
+                  >
+                    {selectedStrategy.riskLevel} RISK
+                  </span>
+                </div>
+
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Description</p>
+                  <p className="text-gray-900">{selectedStrategy.description}</p>
+                </div>
+
+                {selectedStrategy.technicalIndicators &&
+                  selectedStrategy.technicalIndicators.length > 0 && (
+                    <div>
+                      <p className="text-sm font-medium text-gray-600 mb-2">Technical Indicators</p>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedStrategy.technicalIndicators.map((indicator: string) => (
+                          <span
+                            key={indicator}
+                            className="px-3 py-1 bg-blue-100 text-blue-700 text-sm rounded-full"
+                          >
+                            {indicator}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                <div className="border-t pt-4">
+                  <p className="text-sm text-gray-600">
+                    Created: {new Date(selectedStrategy.createdAt).toLocaleString()}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    Last Updated: {new Date(selectedStrategy.updatedAt).toLocaleString()}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
