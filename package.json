@@ -1,0 +1,9 @@
+{
+  "name": "tekoa-trading",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend",
+    "chart-engine"
+  ]
+}
