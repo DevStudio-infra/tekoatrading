@@ -20,8 +20,8 @@ This task list is optimized for rapid MVP delivery with all designed features, f
 
 #### Monorepo and Project Setup
 
-- [ ] **P1.1.1** Create GitHub repository `tekoa-trading`
-- [ ] **P1.1.2** Initialize monorepo: `frontend/`, `backend/`, `chart-engine/`
+- [x] **P1.1.1** Create GitHub repository `tekoa-trading`
+- [x] **P1.1.2** Initialize monorepo: `frontend/`, `backend/`, `chart-engine/`
 - [ ] **P1.1.3** Set up TypeScript configuration for frontend and backend
 - [ ] **P1.1.4** Configure Python environment for chart engine
 - [ ] **P1.1.5** Set up ESLint, Prettier, and development tools
