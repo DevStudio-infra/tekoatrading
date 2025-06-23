@@ -5,5 +5,16 @@
     "backend",
     "frontend",
     "chart-engine"
-  ]
+  ],
+  "scripts": {
+    "lint": "eslint --ext .js,.ts,.tsx backend frontend",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0",
+    "@typescript-eslint/eslint-plugin": "^7.10.1",
+    "@typescript-eslint/parser": "^7.10.1",
+    "eslint-config-next": "^14.2.0",
+    "prettier": "^3.2.5"
+  }
 }
