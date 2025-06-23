@@ -1,0 +1,10 @@
+{
+  "timestamp": "2025-06-23T16:53:20.738Z",
+  "issues": [
+    "Credential 04c362ec... has invalid JSON format"
+  ],
+  "fixes": [
+    "Re-enter credential data with valid JSON format"
+  ],
+  "systemHealth": "NEEDS_ATTENTION"
+}

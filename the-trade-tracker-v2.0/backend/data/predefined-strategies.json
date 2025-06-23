@@ -1,0 +1,296 @@
+{
+  "strategies": [
+    {
+      "name": "Mean Reversion with Moving Averages",
+      "category": "swing_trade",
+      "description": "Identifies price reversals when price significantly deviates from a moving average. Enter long when price crosses above EMA 20 after being below EMA 50, and short when price crosses below EMA 20 after being above EMA 50. Exit when price returns to EMA 50 or achieves 2:1 risk/reward ratio.",
+      "shortDescription": "Price reversal strategy using EMA crossovers for swing trading opportunities",
+      "indicators": [
+        {
+          "type": "ema",
+          "params": { "period": 20, "color": "blue" },
+          "required": true,
+          "description": "Fast EMA for entry signals"
+        },
+        {
+          "type": "ema",
+          "params": { "period": 50, "color": "orange" },
+          "required": true,
+          "description": "Slow EMA for trend direction"
+        }
+      ],
+      "timeframes": ["D1", "H4"],
+      "entryConditions": [
+        "Price crosses above EMA 20 after being below EMA 50 (LONG)",
+        "Price crosses below EMA 20 after being above EMA 50 (SHORT)",
+        "Look for reversal signals from trend changes"
+      ],
+      "exitConditions": ["Price returns to EMA 50", "2:1 risk/reward ratio achieved", "Stop loss below recent swing low (LONG) or above swing high (SHORT)"],
+      "riskManagement": {
+        "riskPerTrade": "1-2%",
+        "riskRewardRatio": 2.0,
+        "stopLossType": "swing_points",
+        "takeProfitType": "target_level",
+        "trailingStop": "move to breakeven after 50% target"
+      },
+      "minRiskPerTrade": 100,
+      "maxRiskPerTrade": 200,
+      "confidenceThreshold": 75,
+      "winRateExpected": 65,
+      "riskRewardRatio": 2.0,
+      "complexity": "intermediate",
+      "marketCondition": "ranging"
+    },
+    {
+      "name": "Support/Resistance Breakout",
+      "category": "day_trade",
+      "description": "Enters on breakouts of key support/resistance levels with volume confirmation. Enter long when price breaks above resistance with increased volume, and short when price breaks below support with volume. Best for trending markets with clear levels.",
+      "shortDescription": "Breakout strategy trading key support and resistance levels with volume",
+      "indicators": [
+        {
+          "type": "volume",
+          "required": true,
+          "description": "Volume confirmation for breakouts"
+        }
+      ],
+      "timeframes": ["H1", "H4", "D1"],
+      "entryConditions": [
+        "Price breaks above resistance level with increased volume (LONG)",
+        "Price breaks below support level with increased volume (SHORT)",
+        "Candle closes above/below the broken level for confirmation"
+      ],
+      "exitConditions": ["Next major support/resistance level", "2:1 risk/reward ratio", "Stop loss below broken resistance (LONG) or above broken support (SHORT)"],
+      "riskManagement": {
+        "riskPerTrade": "1%",
+        "riskRewardRatio": 2.0,
+        "stopLossType": "level_based",
+        "takeProfitType": "next_level",
+        "confirmation": "candle close confirmation required"
+      },
+      "minRiskPerTrade": 100,
+      "maxRiskPerTrade": 150,
+      "confidenceThreshold": 80,
+      "winRateExpected": 60,
+      "riskRewardRatio": 2.0,
+      "complexity": "beginner",
+      "marketCondition": "trending"
+    },
+    {
+      "name": "Bollinger Bands Scalping",
+      "category": "scalping",
+      "description": "Uses Bollinger Bands volatility for quick entries. Enter long when price touches lower band with RSI oversold (<30), and short when price touches upper band with RSI overbought (>70). Exit when price reaches middle band or opposite band.",
+      "shortDescription": "Quick scalping using Bollinger Bands and RSI oversold/overbought conditions",
+      "indicators": [
+        {
+          "type": "bb",
+          "params": { "period": 20, "stdDev": 2.0 },
+          "required": true,
+          "description": "Bollinger Bands for volatility"
+        },
+        {
+          "type": "rsi",
+          "params": { "period": 14 },
+          "required": true,
+          "description": "RSI for overbought/oversold"
+        }
+      ],
+      "timeframes": ["M1", "M5"],
+      "entryConditions": [
+        "Price touches Bollinger lower band with RSI < 30 (LONG)",
+        "Price touches Bollinger upper band with RSI > 70 (SHORT)",
+        "Look for rejection from the touched band"
+      ],
+      "exitConditions": ["Price reaches Bollinger middle band", "Price reaches opposite Bollinger band", "Stop loss 5-10 pips beyond touched band"],
+      "riskManagement": {
+        "riskPerTrade": "0.5-1%",
+        "riskRewardRatio": 1.5,
+        "stopLossType": "fixed_pips",
+        "takeProfitType": "band_target",
+        "maxTrades": "only in volatile markets"
+      },
+      "minRiskPerTrade": 50,
+      "maxRiskPerTrade": 100,
+      "confidenceThreshold": 70,
+      "winRateExpected": 70,
+      "riskRewardRatio": 1.5,
+      "complexity": "intermediate",
+      "marketCondition": "volatile"
+    },
+    {
+      "name": "Moving Average Crossover",
+      "category": "day_trade",
+      "description": "Classic trend following using EMA 9 and EMA 21 crossovers. Enter long when EMA 9 crosses above EMA 21, and short when EMA 9 crosses below EMA 21. Simple but effective in trending markets.",
+      "shortDescription": "Classic trend following using EMA 9 and EMA 21 crossovers",
+      "indicators": [
+        {
+          "type": "ema",
+          "params": { "period": 9, "color": "blue" },
+          "required": true,
+          "description": "Fast EMA"
+        },
+        {
+          "type": "ema",
+          "params": { "period": 21, "color": "red" },
+          "required": true,
+          "description": "Slow EMA"
+        }
+      ],
+      "timeframes": ["M15", "H1", "H4"],
+      "entryConditions": ["EMA 9 crosses above EMA 21 (LONG)", "EMA 9 crosses below EMA 21 (SHORT)", "Preferably in trending market conditions"],
+      "exitConditions": ["2:1 risk/reward ratio", "Next major support/resistance level", "Stop loss below recent swing low (LONG) or above swing high (SHORT)"],
+      "riskManagement": {
+        "riskPerTrade": "1%",
+        "riskRewardRatio": 2.0,
+        "stopLossType": "swing_points",
+        "takeProfitType": "ratio_based",
+        "avoidMarkets": "avoid sideways/choppy markets"
+      },
+      "minRiskPerTrade": 100,
+      "maxRiskPerTrade": 150,
+      "confidenceThreshold": 70,
+      "winRateExpected": 60,
+      "riskRewardRatio": 2.0,
+      "complexity": "beginner",
+      "marketCondition": "trending"
+    },
+    {
+      "name": "VWAP Scalping",
+      "category": "scalping",
+      "description": "Volume-based scalping using VWAP as reference. Enter long when price is above VWAP with volume spikes, and short when price is below VWAP with volume spikes. Best during high liquidity periods.",
+      "shortDescription": "Volume-based scalping strategy using VWAP and volume spikes",
+      "indicators": [
+        {
+          "type": "vwap",
+          "required": true,
+          "description": "Volume Weighted Average Price"
+        },
+        {
+          "type": "volume",
+          "required": true,
+          "description": "Volume analysis"
+        }
+      ],
+      "timeframes": ["M1", "M5"],
+      "entryConditions": ["Price above VWAP with volume spike (LONG)", "Price below VWAP with volume spike (SHORT)", "Look for increased volume and momentum"],
+      "exitConditions": ["5-10 pips profit target", "Next support/resistance level", "Stop loss 3-5 pips beyond VWAP"],
+      "riskManagement": {
+        "riskPerTrade": "0.5%",
+        "riskRewardRatio": 1.5,
+        "stopLossType": "fixed_pips",
+        "takeProfitType": "fixed_pips",
+        "tradingHours": "high liquidity periods (market open)"
+      },
+      "minRiskPerTrade": 50,
+      "maxRiskPerTrade": 100,
+      "confidenceThreshold": 75,
+      "winRateExpected": 65,
+      "riskRewardRatio": 1.5,
+      "complexity": "intermediate",
+      "marketCondition": "volatile"
+    },
+    {
+      "name": "MACD Momentum Strategy",
+      "category": "day_trade",
+      "description": "Momentum strategy using MACD signals with EMA 50 trend filter. Enter long when MACD line crosses above signal line with price above EMA 50, and short when MACD crosses below signal with price below EMA 50.",
+      "shortDescription": "Momentum strategy using MACD signals with EMA 50 trend filter",
+      "indicators": [
+        {
+          "type": "macd",
+          "params": { "fastPeriod": 12, "slowPeriod": 26, "signalPeriod": 9 },
+          "required": true,
+          "description": "MACD for momentum"
+        },
+        {
+          "type": "ema",
+          "params": { "period": 50 },
+          "required": true,
+          "description": "Trend filter"
+        }
+      ],
+      "timeframes": ["H1", "H4"],
+      "entryConditions": [
+        "MACD line crosses above signal line with price above EMA 50 (LONG)",
+        "MACD line crosses below signal line with price below EMA 50 (SHORT)",
+        "Look for bullish/bearish momentum confirmation"
+      ],
+      "exitConditions": ["2:1 risk/reward ratio", "Next support/resistance level", "Stop loss below recent swing low (LONG) or above swing high (SHORT)"],
+      "riskManagement": {
+        "riskPerTrade": "1-2%",
+        "riskRewardRatio": 2.0,
+        "stopLossType": "swing_points",
+        "takeProfitType": "ratio_based",
+        "confirmation": "MACD divergence analysis"
+      },
+      "minRiskPerTrade": 100,
+      "maxRiskPerTrade": 200,
+      "confidenceThreshold": 75,
+      "winRateExpected": 65,
+      "riskRewardRatio": 2.0,
+      "complexity": "intermediate",
+      "marketCondition": "trending"
+    },
+    {
+      "name": "RSI Divergence Strategy",
+      "category": "swing_trade",
+      "description": "Reversal strategy using RSI divergences. Enter long on bullish divergence (price makes lower low, RSI makes higher low) and short on bearish divergence (price makes higher high, RSI makes lower high).",
+      "shortDescription": "Reversal strategy using RSI divergences at support/resistance levels",
+      "indicators": [
+        {
+          "type": "rsi",
+          "params": { "period": 14 },
+          "required": true,
+          "description": "RSI for divergence analysis"
+        }
+      ],
+      "timeframes": ["H4", "D1"],
+      "entryConditions": [
+        "Bullish divergence: price makes lower low, RSI makes higher low (LONG)",
+        "Bearish divergence: price makes higher high, RSI makes lower high (SHORT)",
+        "Preferably at support/resistance levels"
+      ],
+      "exitConditions": ["Next major support/resistance level", "2:1 risk/reward ratio", "Stop loss below recent swing low (LONG) or above swing high (SHORT)"],
+      "riskManagement": {
+        "riskPerTrade": "1-2%",
+        "riskRewardRatio": 2.0,
+        "stopLossType": "swing_points",
+        "takeProfitType": "level_based",
+        "confirmation": "candlestick patterns preferred"
+      },
+      "minRiskPerTrade": 100,
+      "maxRiskPerTrade": 200,
+      "confidenceThreshold": 80,
+      "winRateExpected": 60,
+      "riskRewardRatio": 2.0,
+      "complexity": "advanced",
+      "marketCondition": "any"
+    },
+    {
+      "name": "Candlestick Pattern Strategy",
+      "category": "day_trade",
+      "description": "Price action strategy using candlestick patterns at key levels. Enter long on bullish patterns (hammer, engulfing) at support and short on bearish patterns (shooting star, engulfing) at resistance.",
+      "shortDescription": "Price action strategy using candlestick patterns at support/resistance",
+      "indicators": [],
+      "timeframes": ["M15", "H1", "H4"],
+      "entryConditions": [
+        "Bullish candlestick pattern (hammer, bullish engulfing, doji) at support (LONG)",
+        "Bearish candlestick pattern (shooting star, bearish engulfing, doji) at resistance (SHORT)",
+        "Volume confirmation preferred"
+      ],
+      "exitConditions": ["Next major support/resistance level", "2:1 risk/reward ratio", "Stop loss below pattern low (LONG) or above pattern high (SHORT)"],
+      "riskManagement": {
+        "riskPerTrade": "1%",
+        "riskRewardRatio": 2.0,
+        "stopLossType": "pattern_based",
+        "takeProfitType": "level_based",
+        "confirmation": "volume or additional indicators helpful"
+      },
+      "minRiskPerTrade": 100,
+      "maxRiskPerTrade": 150,
+      "confidenceThreshold": 70,
+      "winRateExpected": 65,
+      "riskRewardRatio": 2.0,
+      "complexity": "beginner",
+      "marketCondition": "any"
+    }
+  ]
+}

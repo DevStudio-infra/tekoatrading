@@ -1,0 +1,343 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  // output   = "../generated/prisma"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// User model
+model User {
+  id        String   @id @default(uuid()) @db.Uuid
+  clerkId   String   @unique @map("clerk_id") @db.VarChar(255)
+  email     String   @map("email") @db.VarChar(255)
+  firstName String?  @map("first_name") @db.VarChar(255)
+  lastName  String?  @map("last_name") @db.VarChar(255)
+  imageUrl  String?  @map("image_url") @db.VarChar(500)
+  username  String?  @map("username") @db.VarChar(100)
+  metadata  String?  @map("metadata") @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
+
+  // Relations
+  strategies        Strategy[]
+  bots              Bot[]
+  positions         Position[]
+  brokerCredentials BrokerCredential[]
+  trades            Trade[]
+  dailyPnLSummaries DailyPnLSummary[]
+
+  @@map("users")
+}
+
+// Trading Pairs model
+model TradingPair {
+  id          Int      @id @default(autoincrement())
+  symbol      String   @unique @db.VarChar(20)
+  name        String   @db.VarChar(100)
+  description String?  @db.Text
+  marketId    String?  @map("market_id") @db.VarChar(50)
+  type        String   @db.VarChar(50) // cryptocurrency, forex, stocks, etc.
+  category    String   @db.VarChar(50) // Crypto, Forex, Stocks, etc.
+  brokerName  String   @map("broker_name") @db.VarChar(100)
+  isActive    Boolean  @default(true) @map("is_active")
+  metadata    Json?    @map("metadata")
+  lastUpdated DateTime @default(now()) @map("last_updated")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relations
+  positions Position[]
+
+  @@map("trading_pairs")
+}
+
+// Strategy Templates model for predefined strategies
+model StrategyTemplate {
+  id               String @id @default(uuid()) @db.Uuid
+  name             String @db.VarChar(100)
+  category         String @db.VarChar(50) // scalping, day_trade, swing_trade
+  description      String @db.Text
+  shortDescription String @map("short_description") @db.VarChar(255)
+
+  // Technical setup
+  indicators Json @map("indicators") // Required indicators with settings
+  timeframes Json @map("timeframes") // Recommended timeframes
+
+  // Entry rules
+  entryConditions Json @map("entry_conditions") // Structured entry rules
+
+  // Exit rules
+  exitConditions Json @map("exit_conditions") // Structured exit rules
+
+  // Risk management
+  riskManagement Json @map("risk_management") // SL, TP, position sizing rules
+
+  // Strategy metadata
+  minRiskPerTrade     Int @default(50) @map("min_risk_per_trade") // Default: 0.5%
+  maxRiskPerTrade     Int @default(200) @map("max_risk_per_trade") // Default: 2%
+  confidenceThreshold Int @default(70) @map("confidence_threshold") // Default: 70%
+
+  // Additional fields
+  winRateExpected Int?   @map("win_rate_expected") // Expected win rate percentage
+  riskRewardRatio Float? @map("risk_reward_ratio") // Expected risk/reward ratio
+  complexity      String @default("intermediate") @map("complexity") // beginner, intermediate, advanced
+  marketCondition String @default("any") @map("market_condition") // trending, ranging, volatile, any
+
+  // System fields
+  isActive   Boolean  @default(true) @map("is_active")
+  usageCount Int      @default(0) @map("usage_count") // Track popularity
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @default(now()) @map("updated_at")
+
+  @@map("strategy_templates")
+}
+
+// Strategies model
+model Strategy {
+  id          String @id @default(uuid()) @db.Uuid
+  userId      String @map("user_id") @db.Uuid
+  name        String @db.VarChar(100)
+  type        String @default("custom") @map("type") // Type of strategy (e.g., custom, trend, swing)
+  description String @db.Text
+  parameters  Json   @map("parameters") // Stores indicators and other parameters
+
+  // New fields for enhanced strategy support
+  templateId      String? @map("template_id") @db.Uuid // Reference to original template if created from template
+  category        String? @db.VarChar(50) // scalping, day_trade, swing_trade
+  timeframes      Json?   @map("timeframes") // Supported timeframes
+  entryConditions Json?   @map("entry_conditions") // Structured entry rules
+  exitConditions  Json?   @map("exit_conditions") // Structured exit rules
+  indicators      Json?   @map("indicators") // Required indicators
+  riskManagement  Json?   @map("risk_management") // Risk management rules
+
+  // Risk management parameters (all in basis points, where 100 = 1%)
+  minRiskPerTrade     Int      @default(50) @map("min_risk_per_trade") // Default: 0.5%
+  maxRiskPerTrade     Int      @default(200) @map("max_risk_per_trade") // Default: 2% (allows up to 10%)
+  confidenceThreshold Int      @default(70) @map("confidence_threshold") // Default: 70%
+  isDefault           Boolean  @default(false) @map("is_default")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @default(now()) @map("updated_at")
+
+  // Relations
+  user User  @relation(fields: [userId], references: [id])
+  bots Bot[]
+
+  @@map("strategies")
+}
+
+// Broker Credentials model
+model BrokerCredential {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  name        String   @db.VarChar(100)
+  broker      String   @db.VarChar(100)
+  credentials Json     @map("credentials")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @default(now()) @map("updated_at")
+
+  // Relations
+  user      User       @relation(fields: [userId], references: [id])
+  bots      Bot[]
+  positions Position[]
+
+  @@map("broker_credentials")
+}
+
+// Bots model
+model Bot {
+  id                    String  @id @default(uuid()) @db.Uuid
+  name                  String  @db.VarChar(100)
+  userId                String  @map("user_id") @db.Uuid
+  strategyId            String  @map("strategy_id") @db.Uuid
+  brokerCredentialId    String  @map("broker_credential_id") @db.Uuid
+  tradingPairSymbol     String? @map("trading_pair_symbol") @db.VarChar(30)
+  timeframe             String  @db.VarChar(10)
+  maxSimultaneousTrades Int     @default(1) @map("max_simultaneous_trades")
+  isActive              Boolean @default(false) @map("is_active")
+  isAiTradingActive     Boolean @default(false) @map("is_ai_trading_active")
+
+  // Advanced Settings
+  aiConfig           Json? @map("ai_config") // AI model configuration
+  riskParams         Json? @map("risk_params") // Risk management parameters
+  tradingConstraints Json? @map("trading_constraints") // Trading constraints and filters
+  perfOptimization   Json? @map("perf_optimization") // Performance optimization settings
+
+  // Performance Tracking Fields - Cached for quick access
+  totalPnL              Float?    @default(0) @map("total_pnl") // Cached total P&L
+  totalTrades           Int       @default(0) @map("total_trades") // Cached total trades count
+  winRate               Float?    @default(0) @map("win_rate") // Cached win rate percentage
+  maxDrawdown           Float?    @default(0) @map("max_drawdown") // Maximum drawdown experienced
+  lastPerformanceUpdate DateTime? @map("last_performance_update") // When performance was last calculated
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
+
+  // Relations
+  user              User              @relation(fields: [userId], references: [id])
+  strategy          Strategy          @relation(fields: [strategyId], references: [id])
+  brokerCredential  BrokerCredential  @relation(fields: [brokerCredentialId], references: [id])
+  positions         Position[]
+  evaluations       Evaluation[]
+  trades            Trade[]
+  dailyPnLSummaries DailyPnLSummary[]
+
+  @@map("bots")
+}
+
+// Positions model - For tracking historical completed positions
+model Position {
+  id                 Int       @id @default(autoincrement())
+  userId             String    @map("user_id") @db.Uuid
+  botId              String?   @map("bot_id") @db.Uuid
+  brokerCredentialId String?   @map("broker_credential_id") @db.Uuid
+  tradingPairId      Int?      @map("trading_pair_id")
+  symbol             String    @db.VarChar(20)
+  side               String    @db.VarChar(5) // long or short
+  entryPrice         Float     @map("entry_price")
+  exitPrice          Float?    @map("exit_price")
+  quantity           Float
+  status             String    @db.VarChar(10) // open, closed
+  pnl                Float?
+  pnlPercent         Float?    @map("pnl_percent")
+  entryTime          DateTime  @map("entry_time")
+  exitTime           DateTime? @map("exit_time")
+  stopLoss           Float?    @map("stop_loss")
+  takeProfit         Float?    @map("take_profit")
+  notes              String?   @db.Text
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @default(now()) @map("updated_at")
+
+  // Relations
+  user             User              @relation(fields: [userId], references: [id])
+  bot              Bot?              @relation(fields: [botId], references: [id])
+  brokerCredential BrokerCredential? @relation(fields: [brokerCredentialId], references: [id])
+  tradingPair      TradingPair?      @relation(fields: [tradingPairId], references: [id])
+
+  @@map("positions")
+}
+
+// Evaluations model
+model Evaluation {
+  id              Int      @id @default(autoincrement())
+  botId           String   @map("bot_id") @db.Uuid
+  startDate       DateTime @map("start_date")
+  endDate         DateTime @map("end_date")
+  chartUrl        String?  @map("chart_url") @db.Text
+  prediction      String?  @db.VarChar(50)
+  confidence      Int?
+  profitLoss      Float?
+  metrics         Json
+  parameters      Json
+  isBaseline      Boolean  @default(false) @map("is_baseline")
+  // AI Analysis fields
+  aiAnalysis      Json?    @map("ai_analysis")
+  tradingSignal   String?  @map("trading_signal") @db.VarChar(10)
+  confidenceScore Int?     @map("confidence_score")
+  riskAssessment  Json?    @map("risk_assessment")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @default(now()) @map("updated_at")
+
+  // Relations
+  bot    Bot     @relation(fields: [botId], references: [id])
+  trades Trade[]
+
+  @@map("evaluations")
+}
+
+// Trades model - For active and completed trading operations
+model Trade {
+  id                String    @id @default(uuid()) @db.Uuid
+  botId             String    @map("bot_id") @db.Uuid
+  evaluationId      Int?      @map("evaluation_id")
+  userId            String    @map("user_id") @db.Uuid
+  symbol            String    @db.VarChar(20)
+  direction         String    @db.VarChar(10) // 'BUY' or 'SELL'
+  orderType         String    @map("order_type") @db.VarChar(20) // 'MARKET', 'LIMIT', 'STOP'
+  quantity          Float
+  entryPrice        Float?    @map("entry_price")
+  currentPrice      Float?    @map("current_price")
+  stopLoss          Float?    @map("stop_loss")
+  takeProfit        Float?    @map("take_profit")
+  status            String    @db.VarChar(20) // 'PENDING', 'OPEN', 'CLOSED', 'CANCELLED'
+  brokerOrderId     String?   @map("broker_order_id") @db.VarChar(100)
+  brokerDealId      String?   @map("broker_deal_id") @db.VarChar(100)
+  rationale         String?   @db.Text
+  aiConfidence      Int?      @map("ai_confidence") // 0-100
+  riskScore         Int?      @map("risk_score") // 1-5
+  profitLoss        Float?    @map("profit_loss")
+  profitLossPercent Float?    @map("profit_loss_percent")
+  fees              Float?    @default(0)
+  openedAt          DateTime? @map("opened_at")
+  closedAt          DateTime? @map("closed_at")
+
+  // Enhanced tracking fields
+  tradeDurationMinutes Int?    @map("trade_duration_minutes")
+  riskRewardRatio      Float?  @map("risk_reward_ratio")
+  marketCondition      String? @map("market_condition") @db.VarChar(50)
+  exitReason           String? @map("exit_reason") @db.VarChar(100) // 'STOP_LOSS', 'TAKE_PROFIT', 'MANUAL', 'TIMEOUT'
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
+
+  // Relations
+  bot        Bot         @relation(fields: [botId], references: [id])
+  evaluation Evaluation? @relation(fields: [evaluationId], references: [id])
+  user       User        @relation(fields: [userId], references: [id])
+
+  @@map("trades")
+}
+
+// Market Data Cache model - For caching real-time market data
+model MarketDataCache {
+  id            Int      @id @default(autoincrement())
+  symbol        String   @db.VarChar(20)
+  timeframe     String   @db.VarChar(10)
+  bid           Float
+  ask           Float
+  spread        Float
+  volume        Float?
+  change        Float?
+  changePercent Float?   @map("change_percent")
+  timestamp     DateTime
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @default(now()) @map("updated_at")
+
+  @@unique([symbol, timeframe])
+  @@map("market_data_cache")
+}
+
+// Daily P&L Summary model - For tracking daily performance
+model DailyPnLSummary {
+  id              Int      @id @default(autoincrement())
+  botId           String   @map("bot_id") @db.Uuid
+  userId          String   @map("user_id") @db.Uuid
+  date            DateTime @db.Date
+  dailyPnL        Float    @map("daily_pnl")
+  cumulativePnL   Float    @map("cumulative_pnl")
+  drawdown        Float
+  tradesOpened    Int      @map("trades_opened")
+  tradesClosed    Int      @map("trades_closed")
+  winningTrades   Int      @map("winning_trades")
+  losingTrades    Int      @map("losing_trades")
+  largestWin      Float    @map("largest_win")
+  largestLoss     Float    @map("largest_loss")
+  totalVolume     Float    @map("total_volume")
+  averageHoldTime Float    @map("average_hold_time") // in hours
+  riskExposure    Float    @map("risk_exposure") // percentage of account
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @default(now()) @map("updated_at")
+
+  // Relations
+  bot  Bot  @relation(fields: [botId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([botId, date])
+  @@map("daily_pnl_summary")
+}
