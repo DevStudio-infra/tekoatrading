@@ -2,7 +2,20 @@ import { router, publicProcedure } from "../trpc";
 import { z } from "zod";
 import { TradingDecisionAgent } from "../ai/trading-decision-agent";
 
-const tradingAgent = new TradingDecisionAgent();
+// Lazy-load the trading agent to handle missing API keys gracefully
+let tradingAgent: TradingDecisionAgent | null = null;
+
+function getTradingAgent() {
+  if (!tradingAgent) {
+    try {
+      tradingAgent = new TradingDecisionAgent();
+    } catch (error) {
+      console.warn("Trading agent initialization failed:", error);
+      return null;
+    }
+  }
+  return tradingAgent;
+}
 
 export const aiRouter = router({
   analyzeTrade: publicProcedure
@@ -21,6 +34,19 @@ export const aiRouter = router({
       }),
     )
     .mutation(async ({ input }) => {
+      const agent = getTradingAgent();
+
+      if (!agent) {
+        // Return mock analysis when agent is not available
+        return {
+          decision: "HOLD",
+          confidence: 0.5,
+          reasoning: "AI analysis unavailable - using conservative approach",
+          riskLevel: "MEDIUM",
+          suggestedPosition: 0,
+        };
+      }
+
       const marketData = {
         symbol: input.symbol,
         price: input.price,
@@ -38,7 +64,7 @@ export const aiRouter = router({
         marketVolatility: input.marketVolatility,
       };
 
-      return tradingAgent.analyze({ marketData, riskData });
+      return agent.analyze({ marketData, riskData });
     }),
 
   getMarketSentiment: publicProcedure

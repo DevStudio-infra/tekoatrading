@@ -473,7 +473,7 @@ export const botsRouter = router({
         });
 
         // If broker credentials are available, get live positions
-        let livePositions = [];
+        let livePositions: any[] = [];
         if (bot.brokerCredential && bot.brokerCredential.credentials) {
           try {
             const credentials = bot.brokerCredential.credentials as any;

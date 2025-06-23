@@ -1,40 +1,67 @@
-import { router, publicProcedure } from "../trpc";
 import { z } from "zod";
+import { router, publicProcedure } from "../trpc";
 
 export const strategiesRouter = router({
   list: publicProcedure.input(z.object({ userId: z.string() })).query(async ({ ctx, input }) => {
-    return ctx.prisma.strategy.findMany({
-      where: { ownerId: input.userId },
-      include: { bots: true },
+    return await ctx.prisma.strategy.findMany({
+      where: { userId: input.userId },
+      orderBy: { createdAt: "desc" },
     });
   }),
 
   create: publicProcedure
     .input(
       z.object({
+        userId: z.string(),
         name: z.string(),
         description: z.string().optional(),
-        rules: z.record(z.any()),
-        userId: z.string(),
+        indicators: z.array(z.string()),
+        parameters: z.record(z.any()),
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      return ctx.prisma.strategy.create({
+      return await ctx.prisma.strategy.create({
         data: {
+          userId: input.userId,
           name: input.name,
           description: input.description,
-          rules: input.rules,
-          ownerId: input.userId,
+          indicators: input.indicators,
+          parameters: input.parameters,
         },
       });
     }),
 
-  getById: publicProcedure
-    .input(z.object({ strategyId: z.string() }))
-    .query(async ({ ctx, input }) => {
-      return ctx.prisma.strategy.findUnique({
-        where: { id: input.strategyId },
-        include: { bots: true },
+  update: publicProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        name: z.string().optional(),
+        description: z.string().optional(),
+        indicators: z.array(z.string()).optional(),
+        parameters: z.record(z.any()).optional(),
+        isActive: z.boolean().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { id, ...updateData } = input;
+      return await ctx.prisma.strategy.update({
+        where: { id },
+        data: updateData,
       });
     }),
+
+  delete: publicProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
+    return await ctx.prisma.strategy.delete({
+      where: { id: input.id },
+    });
+  }),
+
+  getById: publicProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
+    return await ctx.prisma.strategy.findUnique({
+      where: { id: input.id },
+      include: {
+        bots: true,
+      },
+    });
+  }),
 });

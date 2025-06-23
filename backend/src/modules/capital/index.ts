@@ -1,16 +1,32 @@
+// Import for helper function
+import { CapitalMainService } from "./services/capital-main.service";
+import type { CapitalAuthConfig } from "./interfaces/capital-session.interface";
+
+// Capital.com API integration module
 export { CapitalMainService } from "./services/capital-main.service";
-export { CapitalMarketService } from "./services/capital-market.service";
-export { CapitalAuthService } from "./services/capital-auth.service";
-export { CapitalTradingService } from "./services/capital-trading.service";
-export { CapitalPositionService } from "./services/capital-position.service";
 
-export type { CapitalAuthConfig } from "./interfaces/capital-session.interface";
-export type { MarketData, Market } from "./interfaces/capital-market.interface";
-export type { Position, Order } from "./interfaces/capital-position.interface";
+// Re-export interfaces
+export type { CapitalAuthConfig, CapitalSession } from "./interfaces/capital-session.interface";
 
-/**
- * Factory function to create Capital.com API instance
- */
+export type {
+  MarketData,
+  Market,
+  MarketSearchResponse,
+  MarketDetailsResponse,
+  HistoricalPrice,
+  PriceResolution,
+} from "./interfaces/capital-market.interface";
+
+export type {
+  Position,
+  Order,
+  CreatePositionRequest,
+  CreateOrderRequest,
+  DealConfirmation,
+  AccountDetails,
+} from "./interfaces/capital-position.interface";
+
+// Helper function to create Capital API instance
 export function getCapitalApiInstance(config: CapitalAuthConfig): CapitalMainService {
   return new CapitalMainService(config);
 }

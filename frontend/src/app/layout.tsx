@@ -1,17 +1,24 @@
-import "../globals.css";
-import type { ReactNode } from "react";
-import { Providers } from "./providers";
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
+import "./globals.css";
+import { TrpcProvider } from "./providers";
+import Navigation from "../components/ui/navigation";
 
-export const metadata = {
+const inter = Inter({ subsets: ["latin"] });
+
+export const metadata: Metadata = {
   title: "Tekoa Trading",
-  description: "Next-generation AI trading platform",
+  description: "Next-Generation AI Trading Platform",
 };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-gray-50">
-        <Providers>{children}</Providers>
+      <body className={inter.className}>
+        <TrpcProvider>
+          <Navigation />
+          <main>{children}</main>
+        </TrpcProvider>
       </body>
     </html>
   );

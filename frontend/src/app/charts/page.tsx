@@ -1,558 +1,405 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { trpc } from "../../lib/trpc";
 
-interface ChartConfig {
+interface ChartImage {
+  id: string;
   symbol: string;
-  timeframe: "M1" | "M5" | "M15" | "M30" | "H1" | "H4" | "D1";
-  period: string;
-  indicators: string[];
-  chartType: "candle" | "line" | "area";
+  timeframe: string;
+  imageUrl: string;
+  createdAt: string;
 }
 
-interface MarketData {
-  symbol: string;
-  price: number;
-  change: number;
-  changePercent: number;
-  volume: number;
-  high24h: number;
-  low24h: number;
-  lastUpdate: string;
+interface TechnicalIndicator {
+  name: string;
+  value: number;
+  signal: "BUY" | "SELL" | "NEUTRAL";
+  description: string;
 }
 
-export default function Charts() {
-  const [chartConfig, setChartConfig] = useState<ChartConfig>({
-    symbol: "EURUSD",
-    timeframe: "M15",
-    period: "1D",
-    indicators: [],
-    chartType: "candle",
-  });
+export default function ChartsPage() {
+  // const userId = "demo-user"; // Commented out as it's not used yet
 
-  const [selectedTab, setSelectedTab] = useState<"charts" | "analysis" | "saved">("charts");
-  const [chartData, setChartData] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [marketData, setMarketData] = useState<MarketData[]>([]);
-  const [savedCharts, setSavedCharts] = useState<any[]>([]);
+  // Mock chart data
+  const [chartImages] = useState<ChartImage[]>([
+    {
+      id: "1",
+      symbol: "EURUSD",
+      timeframe: "H1",
+      imageUrl: "/chart-placeholder.png",
+      createdAt: new Date().toISOString(),
+    },
+    {
+      id: "2",
+      symbol: "GBPUSD",
+      timeframe: "M15",
+      imageUrl: "/chart-placeholder.png",
+      createdAt: new Date().toISOString(),
+    },
+    {
+      id: "3",
+      symbol: "USDJPY",
+      timeframe: "H4",
+      imageUrl: "/chart-placeholder.png",
+      createdAt: new Date().toISOString(),
+    },
+  ]);
 
-  // Mock user ID - in real app, get from auth
-  const userId = "user-1";
+  const [selectedSymbol, setSelectedSymbol] = useState("EURUSD");
+  const [selectedTimeframe, setSelectedTimeframe] = useState("H1");
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [currentPrice, setCurrentPrice] = useState(1.0875);
+  const [priceChange, setPriceChange] = useState(0.0025);
+  const [activeTab, setActiveTab] = useState<"live" | "analysis" | "saved">("live");
 
-  // Fetch chart images from backend
-  const { data: chartImages } = trpc.charts?.list?.useQuery({ userId }) || { data: null };
+  const symbols = ["EURUSD", "GBPUSD", "USDJPY", "USDCHF", "AUDUSD", "USDCAD"];
+  const timeframes = ["M1", "M5", "M15", "M30", "H1", "H4", "D1"];
 
-  // Mock real-time market data
+  // Mock technical indicators
+  const [technicalIndicators] = useState<TechnicalIndicator[]>([
+    { name: "RSI (14)", value: 65.2, signal: "NEUTRAL", description: "Relative Strength Index" },
+    {
+      name: "MACD",
+      value: 0.0012,
+      signal: "BUY",
+      description: "Moving Average Convergence Divergence",
+    },
+    {
+      name: "Bollinger Bands",
+      value: 1.085,
+      signal: "NEUTRAL",
+      description: "Price near middle band",
+    },
+    { name: "Stochastic", value: 45.8, signal: "NEUTRAL", description: "Stochastic Oscillator" },
+    { name: "Williams %R", value: -35.2, signal: "BUY", description: "Williams Percent Range" },
+    { name: "ADX", value: 25.6, signal: "NEUTRAL", description: "Average Directional Index" },
+  ]);
+
+  // Simulate real-time price updates
   useEffect(() => {
     const interval = setInterval(() => {
-      setMarketData([
-        {
-          symbol: "EURUSD",
-          price: 1.0845 + (Math.random() - 0.5) * 0.001,
-          change: (Math.random() - 0.5) * 0.002,
-          changePercent: (Math.random() - 0.5) * 0.2,
-          volume: 1250000 + Math.random() * 100000,
-          high24h: 1.0865,
-          low24h: 1.0825,
-          lastUpdate: new Date().toISOString(),
-        },
-        {
-          symbol: "GBPUSD",
-          price: 1.2654 + (Math.random() - 0.5) * 0.001,
-          change: (Math.random() - 0.5) * 0.002,
-          changePercent: (Math.random() - 0.5) * 0.2,
-          volume: 950000 + Math.random() * 100000,
-          high24h: 1.2675,
-          low24h: 1.2635,
-          lastUpdate: new Date().toISOString(),
-        },
-        {
-          symbol: "USDJPY",
-          price: 149.85 + (Math.random() - 0.5) * 0.1,
-          change: (Math.random() - 0.5) * 0.2,
-          changePercent: (Math.random() - 0.5) * 0.2,
-          volume: 1100000 + Math.random() * 100000,
-          high24h: 150.15,
-          low24h: 149.65,
-          lastUpdate: new Date().toISOString(),
-        },
-        {
-          symbol: "XAUUSD",
-          price: 2065.5 + (Math.random() - 0.5) * 5,
-          change: (Math.random() - 0.5) * 10,
-          changePercent: (Math.random() - 0.5) * 0.5,
-          volume: 85000 + Math.random() * 10000,
-          high24h: 2075.2,
-          low24h: 2055.8,
-          lastUpdate: new Date().toISOString(),
-        },
-      ]);
+      const change = (Math.random() - 0.5) * 0.001;
+      setCurrentPrice((prev) => prev + change);
+      setPriceChange(change);
     }, 2000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [selectedSymbol]);
 
-  // Mock saved charts
-  useEffect(() => {
-    setSavedCharts([
-      {
-        id: "chart-1",
-        name: "EURUSD Scalping Setup",
-        symbol: "EURUSD",
-        timeframe: "M5",
-        indicators: ["RSI", "MACD", "SMA"],
-        createdAt: "2024-01-15T10:30:00Z",
-        thumbnail: "/api/placeholder/300/200",
-      },
-      {
-        id: "chart-2",
-        name: "Gold Weekly Analysis",
-        symbol: "XAUUSD",
-        timeframe: "H4",
-        indicators: ["Bollinger", "ADX"],
-        createdAt: "2024-01-14T15:20:00Z",
-        thumbnail: "/api/placeholder/300/200",
-      },
-    ]);
-  }, []);
+  const handleGenerateChart = () => {
+    setIsAnalyzing(true);
+    // Mock chart generation
+    setTimeout(() => {
+      setIsAnalyzing(false);
+      console.log(`Generated chart for ${selectedSymbol} ${selectedTimeframe}`);
+    }, 2000);
+  };
 
-  const tradingPairs = [
-    "EURUSD",
-    "GBPUSD",
-    "USDJPY",
-    "USDCHF",
-    "AUDUSD",
-    "USDCAD",
-    "NZDUSD",
-    "EURGBP",
-    "EURJPY",
-    "GBPJPY",
-    "XAUUSD",
-    "XAGUSD",
-    "BTCUSD",
-    "ETHUSD",
-  ];
-
-  const timeframes = [
-    { value: "M1", label: "1 Minute" },
-    { value: "M5", label: "5 Minutes" },
-    { value: "M15", label: "15 Minutes" },
-    { value: "M30", label: "30 Minutes" },
-    { value: "H1", label: "1 Hour" },
-    { value: "H4", label: "4 Hours" },
-    { value: "D1", label: "1 Day" },
-  ];
-
-  const periods = [
-    { value: "1H", label: "1 Hour" },
-    { value: "4H", label: "4 Hours" },
-    { value: "1D", label: "1 Day" },
-    { value: "1W", label: "1 Week" },
-    { value: "1M", label: "1 Month" },
-  ];
-
-  const availableIndicators = [
-    { value: "SMA", label: "Simple Moving Average" },
-    { value: "EMA", label: "Exponential Moving Average" },
-    { value: "RSI", label: "Relative Strength Index" },
-    { value: "MACD", label: "MACD" },
-    { value: "Bollinger", label: "Bollinger Bands" },
-    { value: "Stochastic", label: "Stochastic" },
-    { value: "ADX", label: "ADX" },
-    { value: "Volume", label: "Volume" },
-  ];
-
-  const chartTypes = [
-    { value: "candle", label: "Candlestick" },
-    { value: "line", label: "Line" },
-    { value: "area", label: "Area" },
-  ];
-
-  const generateChart = async () => {
-    setLoading(true);
-    try {
-      // Mock chart generation - in real app, call backend service
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-
-      // Simulate chart data response
-      setChartData("mock-chart-data-base64");
-    } catch (error) {
-      console.error("Error generating chart:", error);
-    } finally {
-      setLoading(false);
+  const getSignalColor = (signal: string) => {
+    switch (signal) {
+      case "BUY":
+        return "text-green-600 bg-green-100";
+      case "SELL":
+        return "text-red-600 bg-red-100";
+      case "NEUTRAL":
+        return "text-gray-600 bg-gray-100";
+      default:
+        return "text-gray-600 bg-gray-100";
     }
   };
 
-  const saveChart = async () => {
-    const newChart = {
-      id: `chart-${Date.now()}`,
-      name: `${chartConfig.symbol} ${chartConfig.timeframe} Analysis`,
-      symbol: chartConfig.symbol,
-      timeframe: chartConfig.timeframe,
-      indicators: chartConfig.indicators,
-      createdAt: new Date().toISOString(),
-      thumbnail: "/api/placeholder/300/200",
-    };
-    setSavedCharts((prev) => [newChart, ...prev]);
-  };
-
-  const toggleIndicator = (indicator: string) => {
-    setChartConfig((prev) => ({
-      ...prev,
-      indicators: prev.indicators.includes(indicator)
-        ? prev.indicators.filter((i) => i !== indicator)
-        : [...prev.indicators, indicator],
-    }));
-  };
-
-  const tabs = [
-    { id: "charts", label: "Live Charts" },
-    { id: "analysis", label: "Technical Analysis" },
-    { id: "saved", label: "Saved Charts" },
-  ];
-
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-gray-50 p-8">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Trading Charts</h1>
-            <p className="text-gray-600 mt-1">Advanced technical analysis and charting tools</p>
-          </div>
-          <div className="flex items-center space-x-4">
-            <button
-              onClick={saveChart}
-              disabled={!chartData}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
-            >
-              Save Chart
-            </button>
-            <button
-              onClick={generateChart}
-              disabled={loading}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-            >
-              {loading ? "Generating..." : "Generate Chart"}
-            </button>
-          </div>
-        </div>
+        <h1 className="text-3xl font-bold text-gray-900 mb-8">Trading Charts</h1>
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Sidebar - Market Data */}
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-lg shadow p-6 mb-6">
-              <h3 className="text-lg font-semibold mb-4">Market Overview</h3>
-              <div className="space-y-3">
-                {marketData.map((market) => (
-                  <div
-                    key={market.symbol}
-                    className={`p-3 rounded-lg cursor-pointer transition-colors ${
-                      chartConfig.symbol === market.symbol
-                        ? "bg-blue-50 border-blue-200"
-                        : "hover:bg-gray-50"
-                    }`}
-                    onClick={() => setChartConfig((prev) => ({ ...prev, symbol: market.symbol }))}
-                  >
-                    <div className="flex justify-between items-center">
-                      <span className="font-semibold text-sm">{market.symbol}</span>
-                      <span
-                        className={`text-sm ${market.change >= 0 ? "text-green-600" : "text-red-600"}`}
-                      >
-                        {market.change >= 0 ? "+" : ""}
-                        {market.changePercent.toFixed(2)}%
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center mt-1">
-                      <span className="text-lg font-bold">{market.price.toFixed(4)}</span>
-                      <span className="text-xs text-gray-500">
-                        Vol: {(market.volume / 1000).toFixed(0)}K
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Chart Controls */}
-            <div className="bg-white rounded-lg shadow p-6">
-              <h3 className="text-lg font-semibold mb-4">Chart Settings</h3>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Symbol</label>
-                  <select
-                    value={chartConfig.symbol}
-                    onChange={(e) =>
-                      setChartConfig((prev) => ({ ...prev, symbol: e.target.value }))
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    {tradingPairs.map((pair) => (
-                      <option key={pair} value={pair}>
-                        {pair}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Timeframe</label>
-                  <select
-                    value={chartConfig.timeframe}
-                    onChange={(e) =>
-                      setChartConfig((prev) => ({ ...prev, timeframe: e.target.value as any }))
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    {timeframes.map((tf) => (
-                      <option key={tf.value} value={tf.value}>
-                        {tf.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Period</label>
-                  <select
-                    value={chartConfig.period}
-                    onChange={(e) =>
-                      setChartConfig((prev) => ({ ...prev, period: e.target.value }))
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    {periods.map((p) => (
-                      <option key={p.value} value={p.value}>
-                        {p.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Chart Type</label>
-                  <select
-                    value={chartConfig.chartType}
-                    onChange={(e) =>
-                      setChartConfig((prev) => ({ ...prev, chartType: e.target.value as any }))
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    {chartTypes.map((type) => (
-                      <option key={type.value} value={type.value}>
-                        {type.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Technical Indicators
-                  </label>
-                  <div className="space-y-2 max-h-40 overflow-y-auto">
-                    {availableIndicators.map((indicator) => (
-                      <label key={indicator.value} className="flex items-center">
-                        <input
-                          type="checkbox"
-                          checked={chartConfig.indicators.includes(indicator.value)}
-                          onChange={() => toggleIndicator(indicator.value)}
-                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                        />
-                        <span className="ml-2 text-sm text-gray-700">{indicator.label}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
+        {/* Tab Navigation */}
+        <div className="bg-white rounded-lg shadow-lg mb-8">
+          <div className="border-b border-gray-200">
+            <nav className="flex space-x-8 px-6">
+              {[
+                { id: "live", label: "Live Chart" },
+                { id: "analysis", label: "Technical Analysis" },
+                { id: "saved", label: "Saved Charts" },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as "live" | "analysis" | "saved")}
+                  className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                    activeTab === tab.id
+                      ? "border-blue-500 text-blue-600"
+                      : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </nav>
           </div>
 
-          {/* Main Content */}
-          <div className="lg:col-span-3">
-            {/* Tabs */}
-            <div className="bg-white rounded-lg shadow mb-6">
-              <div className="border-b border-gray-200">
-                <nav className="flex space-x-8 px-6">
-                  {tabs.map((tab) => (
-                    <button
-                      key={tab.id}
-                      onClick={() => setSelectedTab(tab.id as any)}
-                      className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                        selectedTab === tab.id
-                          ? "border-blue-500 text-blue-600"
-                          : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                      }`}
-                    >
-                      {tab.label}
-                    </button>
-                  ))}
-                </nav>
-              </div>
-
-              <div className="p-6">
-                {selectedTab === "charts" && (
+          <div className="p-6">
+            {/* Live Chart Tab */}
+            {activeTab === "live" && (
+              <div className="space-y-6">
+                {/* Chart Controls */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div>
-                    {/* Chart Header */}
-                    <div className="flex justify-between items-center mb-4">
-                      <h3 className="text-xl font-semibold">
-                        {chartConfig.symbol} -{" "}
-                        {timeframes.find((tf) => tf.value === chartConfig.timeframe)?.label}
-                      </h3>
-                      <div className="flex items-center space-x-2">
-                        {chartConfig.indicators.map((indicator) => (
-                          <span
-                            key={indicator}
-                            className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full"
-                          >
-                            {indicator}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
+                    <label className="block text-sm font-medium mb-2">Symbol</label>
+                    <select
+                      value={selectedSymbol}
+                      onChange={(e) => setSelectedSymbol(e.target.value)}
+                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      {symbols.map((symbol) => (
+                        <option key={symbol} value={symbol}>
+                          {symbol}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-                    {/* Chart Display */}
-                    <div className="bg-gray-50 rounded-lg p-4 min-h-[500px] flex items-center justify-center">
-                      {loading ? (
-                        <div className="text-center">
-                          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                          <p className="text-gray-600">Generating chart...</p>
-                        </div>
-                      ) : chartData ? (
-                        <div className="w-full">
-                          {/* Mock chart display */}
-                          <div className="bg-white rounded-lg p-4 border-2 border-dashed border-gray-300">
-                            <div className="text-center text-gray-500">
-                              <div className="w-16 h-16 bg-gray-200 rounded-full mx-auto mb-4 flex items-center justify-center">
-                                📊
-                              </div>
-                              <p className="text-lg font-semibold mb-2">Chart Generated</p>
-                              <p className="text-sm">
-                                {chartConfig.symbol} {chartConfig.timeframe} chart with{" "}
-                                {chartConfig.indicators.length} indicators
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="text-center text-gray-500">
-                          <div className="w-16 h-16 bg-gray-200 rounded-full mx-auto mb-4 flex items-center justify-center">
-                            📈
-                          </div>
-                          <p className="text-lg font-semibold mb-2">No Chart Generated</p>
-                          <p className="text-sm">
-                            Click "Generate Chart" to create a technical analysis chart
-                          </p>
-                        </div>
-                      )}
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Timeframe</label>
+                    <select
+                      value={selectedTimeframe}
+                      onChange={(e) => setSelectedTimeframe(e.target.value)}
+                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      {timeframes.map((tf) => (
+                        <option key={tf} value={tf}>
+                          {tf}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Current Price</label>
+                    <div className="p-2 bg-gray-50 rounded-lg">
+                      <div className="text-lg font-bold">{currentPrice.toFixed(5)}</div>
+                      <div
+                        className={`text-sm ${priceChange >= 0 ? "text-green-600" : "text-red-600"}`}
+                      >
+                        {priceChange >= 0 ? "+" : ""}
+                        {priceChange.toFixed(4)}
+                      </div>
                     </div>
                   </div>
-                )}
 
-                {selectedTab === "analysis" && (
-                  <div className="space-y-6">
-                    <h3 className="text-lg font-semibold">
-                      Technical Analysis for {chartConfig.symbol}
-                    </h3>
+                  <div className="flex items-end">
+                    <button
+                      onClick={handleGenerateChart}
+                      disabled={isAnalyzing}
+                      className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                    >
+                      {isAnalyzing ? "Analyzing..." : "Generate Chart"}
+                    </button>
+                  </div>
+                </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="bg-gray-50 p-4 rounded-lg">
-                        <h4 className="font-semibold text-gray-900 mb-3">Key Levels</h4>
-                        <div className="space-y-2 text-sm">
-                          <div className="flex justify-between">
-                            <span className="text-gray-600">Resistance:</span>
-                            <span className="font-semibold text-red-600">1.0875</span>
+                {/* Live Chart Area */}
+                <div className="bg-gray-100 rounded-lg p-8">
+                  <div className="w-full h-96 bg-white rounded-lg flex items-center justify-center border-2 border-dashed border-gray-300">
+                    <div className="text-gray-500 text-center">
+                      <div className="text-4xl mb-2">📈</div>
+                      <p className="text-lg font-medium">Live Chart: {selectedSymbol}</p>
+                      <p className="text-sm">Timeframe: {selectedTimeframe}</p>
+                      <p className="text-xs mt-2 text-gray-400">Chart integration coming soon</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Quick Market Overview */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-blue-50 p-4 rounded-lg">
+                    <h3 className="font-medium text-blue-900 mb-2">Trend Analysis</h3>
+                    <p className="text-blue-700">Bullish trend detected</p>
+                    <p className="text-sm text-blue-600 mt-1">Strong upward momentum</p>
+                  </div>
+
+                  <div className="bg-green-50 p-4 rounded-lg">
+                    <h3 className="font-medium text-green-900 mb-2">Support & Resistance</h3>
+                    <p className="text-green-700">Support: {(currentPrice - 0.005).toFixed(5)}</p>
+                    <p className="text-green-700">
+                      Resistance: {(currentPrice + 0.005).toFixed(5)}
+                    </p>
+                  </div>
+
+                  <div className="bg-purple-50 p-4 rounded-lg">
+                    <h3 className="font-medium text-purple-900 mb-2">Volume</h3>
+                    <p className="text-purple-700">High volume detected</p>
+                    <p className="text-sm text-purple-600 mt-1">Above average activity</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Technical Analysis Tab */}
+            {activeTab === "analysis" && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <h3 className="text-lg font-semibold mb-4">Technical Indicators</h3>
+                    <div className="space-y-3">
+                      {technicalIndicators.map((indicator, index) => (
+                        <div
+                          key={index}
+                          className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                        >
+                          <div>
+                            <p className="font-medium">{indicator.name}</p>
+                            <p className="text-sm text-gray-600">{indicator.description}</p>
                           </div>
-                          <div className="flex justify-between">
-                            <span className="text-gray-600">Support:</span>
-                            <span className="font-semibold text-green-600">1.0815</span>
+                          <div className="text-right">
+                            <p className="font-medium">{indicator.value.toFixed(4)}</p>
+                            <span
+                              className={`px-2 py-1 rounded-full text-xs font-medium ${getSignalColor(indicator.signal)}`}
+                            >
+                              {indicator.signal}
+                            </span>
                           </div>
-                          <div className="flex justify-between">
-                            <span className="text-gray-600">Pivot:</span>
-                            <span className="font-semibold">1.0845</span>
-                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="text-lg font-semibold mb-4">Market Sentiment</h3>
+                    <div className="space-y-4">
+                      <div className="bg-green-50 p-4 rounded-lg">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-medium text-green-900">Bullish Signals</span>
+                          <span className="text-green-700 font-bold">65%</span>
+                        </div>
+                        <div className="w-full bg-green-200 rounded-full h-2">
+                          <div
+                            className="bg-green-600 h-2 rounded-full"
+                            style={{ width: "65%" }}
+                          ></div>
+                        </div>
+                      </div>
+
+                      <div className="bg-red-50 p-4 rounded-lg">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-medium text-red-900">Bearish Signals</span>
+                          <span className="text-red-700 font-bold">20%</span>
+                        </div>
+                        <div className="w-full bg-red-200 rounded-full h-2">
+                          <div
+                            className="bg-red-600 h-2 rounded-full"
+                            style={{ width: "20%" }}
+                          ></div>
                         </div>
                       </div>
 
                       <div className="bg-gray-50 p-4 rounded-lg">
-                        <h4 className="font-semibold text-gray-900 mb-3">Trend Analysis</h4>
-                        <div className="space-y-2 text-sm">
-                          <div className="flex justify-between">
-                            <span className="text-gray-600">Short Term:</span>
-                            <span className="font-semibold text-green-600">Bullish</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-gray-600">Medium Term:</span>
-                            <span className="font-semibold text-yellow-600">Neutral</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-gray-600">Long Term:</span>
-                            <span className="font-semibold text-red-600">Bearish</span>
-                          </div>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-medium text-gray-900">Neutral Signals</span>
+                          <span className="text-gray-700 font-bold">15%</span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div
+                            className="bg-gray-600 h-2 rounded-full"
+                            style={{ width: "15%" }}
+                          ></div>
                         </div>
                       </div>
                     </div>
 
-                    <div className="bg-blue-50 p-4 rounded-lg">
-                      <h4 className="font-semibold text-blue-900 mb-2">AI Analysis Summary</h4>
-                      <p className="text-blue-800 text-sm">
-                        Current market conditions show mixed signals. The RSI indicates oversold
-                        conditions while MACD shows bullish momentum. Consider waiting for
-                        confirmation before entering positions.
+                    <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+                      <h4 className="font-medium text-blue-900 mb-2">Overall Recommendation</h4>
+                      <p className="text-blue-700 font-medium">MODERATE BUY</p>
+                      <p className="text-sm text-blue-600 mt-1">
+                        Based on technical indicators showing bullish momentum with manageable risk
                       </p>
                     </div>
                   </div>
-                )}
+                </div>
 
-                {selectedTab === "saved" && (
-                  <div>
-                    <h3 className="text-lg font-semibold mb-4">Saved Charts</h3>
-                    {savedCharts.length > 0 ? (
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {savedCharts.map((chart) => (
-                          <div
-                            key={chart.id}
-                            className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
-                          >
-                            <div className="bg-gray-100 h-32 rounded-md mb-3 flex items-center justify-center">
-                              <span className="text-gray-500">📊</span>
+                {/* Pattern Recognition */}
+                <div className="bg-white border rounded-lg p-6">
+                  <h3 className="text-lg font-semibold mb-4">Pattern Recognition</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="p-4 border rounded-lg">
+                      <h4 className="font-medium mb-2">Ascending Triangle</h4>
+                      <p className="text-sm text-gray-600 mb-2">Bullish continuation pattern</p>
+                      <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs">
+                        Confirmed
+                      </span>
+                    </div>
+                    <div className="p-4 border rounded-lg">
+                      <h4 className="font-medium mb-2">Golden Cross</h4>
+                      <p className="text-sm text-gray-600 mb-2">50 MA crosses above 200 MA</p>
+                      <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs">
+                        Pending
+                      </span>
+                    </div>
+                    <div className="p-4 border rounded-lg">
+                      <h4 className="font-medium mb-2">Support Level</h4>
+                      <p className="text-sm text-gray-600 mb-2">Strong support at 1.0820</p>
+                      <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">
+                        Active
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Saved Charts Tab */}
+            {activeTab === "saved" && (
+              <div>
+                {chartImages && chartImages.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {chartImages.map((chart) => (
+                      <div
+                        key={chart.id}
+                        className="border rounded-lg overflow-hidden hover:shadow-lg transition-shadow"
+                      >
+                        <div className="bg-gray-200 h-48 flex items-center justify-center">
+                          <div className="text-gray-500 text-center">
+                            <div className="text-3xl mb-2">📊</div>
+                            <p className="font-medium">{chart.symbol}</p>
+                            <p className="text-sm">{chart.timeframe}</p>
+                          </div>
+                        </div>
+                        <div className="p-4">
+                          <div className="flex justify-between items-center">
+                            <div>
+                              <p className="font-medium">
+                                {chart.symbol} - {chart.timeframe}
+                              </p>
+                              <p className="text-sm text-gray-600">
+                                {new Date(chart.createdAt).toLocaleDateString()}
+                              </p>
                             </div>
-                            <h4 className="font-semibold text-sm mb-1">{chart.name}</h4>
-                            <p className="text-xs text-gray-600 mb-2">
-                              {chart.symbol} • {chart.timeframe} • {chart.indicators.length}{" "}
-                              indicators
-                            </p>
-                            <p className="text-xs text-gray-500">
-                              {new Date(chart.createdAt).toLocaleDateString()}
-                            </p>
-                            <div className="flex space-x-2 mt-3">
-                              <button className="flex-1 py-1 px-2 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200">
-                                Load
+                            <div className="flex gap-2">
+                              <button className="text-blue-600 hover:text-blue-800 text-sm">
+                                View
                               </button>
-                              <button className="flex-1 py-1 px-2 bg-red-100 text-red-700 rounded text-xs hover:bg-red-200">
+                              <button className="text-red-600 hover:text-red-800 text-sm">
                                 Delete
                               </button>
                             </div>
                           </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-center py-12">
-                        <div className="w-16 h-16 bg-gray-200 rounded-full mx-auto mb-4 flex items-center justify-center">
-                          💾
                         </div>
-                        <p className="text-gray-500 mb-2">No saved charts</p>
-                        <p className="text-sm text-gray-400">
-                          Generate and save charts to access them here
-                        </p>
                       </div>
-                    )}
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <div className="text-gray-400 text-6xl mb-4">📊</div>
+                    <p className="text-gray-500 mb-4">No saved charts yet.</p>
+                    <button
+                      onClick={() => setActiveTab("live")}
+                      className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
+                    >
+                      Generate Your First Chart
+                    </button>
                   </div>
                 )}
               </div>
-            </div>
+            )}
           </div>
         </div>
       </div>

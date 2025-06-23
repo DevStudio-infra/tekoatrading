@@ -1,182 +1,141 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { trpc } from "../../lib/trpc";
+import { useState } from "react";
 
 interface Position {
   id: string;
   symbol: string;
-  side: "long" | "short";
+  type: "BUY" | "SELL";
   size: number;
   entryPrice: number;
   currentPrice: number;
-  unrealizedPnL: number;
-  realizedPnL: number;
-  status: string;
+  pnl: number;
   openTime: string;
-  botId?: string;
-  botName?: string;
 }
 
 interface Trade {
   id: string;
   symbol: string;
-  side: "long" | "short";
+  type: "BUY" | "SELL";
   size: number;
   entryPrice: number;
-  exitPrice?: number;
-  profitLoss: number;
-  status: string;
+  exitPrice: number;
+  pnl: number;
   openTime: string;
-  closeTime?: string;
-  botName?: string;
+  closeTime: string;
 }
 
-export default function Portfolio() {
-  const [selectedTab, setSelectedTab] = useState<
-    "overview" | "positions" | "trades" | "performance"
-  >("overview");
-  const [timeframe, setTimeframe] = useState("1D");
-
-  // Mock user ID - in real app, get from auth
-  const userId = "user-1";
-
-  // Fetch portfolio data
-  const { data: portfolioData, isLoading: portfolioLoading } =
-    trpc.portfolio?.getOverview?.useQuery({ userId }) || { data: null, isLoading: false };
-  const { data: bots } = trpc.bots.getAll.useQuery({ userId });
-
-  // Mock real-time data for demonstration
-  const [liveData, setLiveData] = useState({
-    totalBalance: 50000,
-    totalValue: 52750,
-    dayChange: 1250,
-    dayChangePercent: 2.44,
-    weekChange: 2750,
-    monthChange: 4200,
-    positions: [
-      {
-        id: "pos-1",
-        symbol: "EURUSD",
-        side: "long" as const,
-        size: 10000,
-        entryPrice: 1.0835,
-        currentPrice: 1.0845,
-        unrealizedPnL: 100.5,
-        realizedPnL: 0,
-        status: "open",
-        openTime: "2024-01-15T10:30:00Z",
-        botId: "bot-1",
-        botName: "EUR Scalper",
-      },
-      {
-        id: "pos-2",
-        symbol: "GBPUSD",
-        side: "short" as const,
-        size: 5000,
-        entryPrice: 1.2665,
-        currentPrice: 1.2654,
-        unrealizedPnL: 55.25,
-        realizedPnL: 0,
-        status: "open",
-        openTime: "2024-01-15T11:15:00Z",
-        botId: "bot-2",
-        botName: "GBP Momentum",
-      },
-    ] as Position[],
-    recentTrades: [
-      {
-        id: "trade-1",
-        symbol: "USDJPY",
-        side: "long" as const,
-        size: 8000,
-        entryPrice: 149.85,
-        exitPrice: 150.15,
-        profitLoss: 159.84,
-        status: "closed",
-        openTime: "2024-01-15T09:00:00Z",
-        closeTime: "2024-01-15T09:45:00Z",
-        botName: "JPY Trend",
-      },
-      {
-        id: "trade-2",
-        symbol: "XAUUSD",
-        side: "short" as const,
-        size: 1,
-        entryPrice: 2065.5,
-        exitPrice: 2058.25,
-        profitLoss: 7.25,
-        status: "closed",
-        openTime: "2024-01-15T08:30:00Z",
-        closeTime: "2024-01-15T10:15:00Z",
-        botName: "Gold Scalper",
-      },
-    ] as Trade[],
+export default function PortfolioPage() {
+  // Mock portfolio data - in a real app, this would come from tRPC
+  const [portfolioData] = useState({
+    totalBalance: 10000,
+    totalPnL: 1250.75,
+    totalPnLPercentage: 12.51,
+    openPositions: 3,
+    todayPnL: 125.5,
+    equity: 11250.75,
+    freeMargin: 9250.75,
+    marginLevel: 562,
   });
 
-  // Simulate real-time updates
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setLiveData((prev) => ({
-        ...prev,
-        positions: prev.positions.map((pos) => ({
-          ...pos,
-          currentPrice: pos.currentPrice + (Math.random() - 0.5) * 0.001,
-          unrealizedPnL: pos.unrealizedPnL + (Math.random() - 0.5) * 10,
-        })),
-      }));
-    }, 3000);
+  const [positions] = useState<Position[]>([
+    {
+      id: "1",
+      symbol: "EURUSD",
+      type: "BUY",
+      size: 1.0,
+      entryPrice: 1.085,
+      currentPrice: 1.0875,
+      pnl: 250.0,
+      openTime: new Date().toISOString(),
+    },
+    {
+      id: "2",
+      symbol: "GBPUSD",
+      type: "SELL",
+      size: 0.5,
+      entryPrice: 1.265,
+      currentPrice: 1.2625,
+      pnl: 125.0,
+      openTime: new Date().toISOString(),
+    },
+    {
+      id: "3",
+      symbol: "USDJPY",
+      type: "BUY",
+      size: 0.8,
+      entryPrice: 149.5,
+      currentPrice: 149.25,
+      pnl: -200.0,
+      openTime: new Date().toISOString(),
+    },
+  ]);
 
-    return () => clearInterval(interval);
-  }, []);
+  const [trades] = useState<Trade[]>([
+    {
+      id: "1",
+      symbol: "USDJPY",
+      type: "BUY",
+      size: 1.0,
+      entryPrice: 149.5,
+      exitPrice: 150.25,
+      pnl: 500.0,
+      openTime: new Date(Date.now() - 86400000).toISOString(),
+      closeTime: new Date().toISOString(),
+    },
+    {
+      id: "2",
+      symbol: "AUDUSD",
+      type: "SELL",
+      size: 0.8,
+      entryPrice: 0.675,
+      exitPrice: 0.6725,
+      pnl: 200.0,
+      openTime: new Date(Date.now() - 172800000).toISOString(),
+      closeTime: new Date(Date.now() - 86400000).toISOString(),
+    },
+    {
+      id: "3",
+      symbol: "EURUSD",
+      type: "BUY",
+      size: 0.5,
+      entryPrice: 1.0825,
+      exitPrice: 1.0875,
+      pnl: 250.0,
+      openTime: new Date(Date.now() - 259200000).toISOString(),
+      closeTime: new Date(Date.now() - 172800000).toISOString(),
+    },
+  ]);
 
-  const totalUnrealizedPnL = liveData.positions.reduce((sum, pos) => sum + pos.unrealizedPnL, 0);
-  const totalRealizedPnL = liveData.recentTrades.reduce((sum, trade) => sum + trade.profitLoss, 0);
-  const totalPnL = totalUnrealizedPnL + totalRealizedPnL;
+  const [activeTab, setActiveTab] = useState<"overview" | "positions" | "trades" | "performance">(
+    "overview",
+  );
 
-  const winningTrades = liveData.recentTrades.filter((trade) => trade.profitLoss > 0).length;
-  const winRate =
-    liveData.recentTrades.length > 0 ? (winningTrades / liveData.recentTrades.length) * 100 : 0;
+  const handleClosePosition = (positionId: string) => {
+    if (confirm("Are you sure you want to close this position?")) {
+      console.log("Closing position:", positionId);
+      // In a real app, this would call a tRPC mutation
+    }
+  };
 
-  const tabs = [
-    { id: "overview", label: "Overview" },
-    { id: "positions", label: "Positions" },
-    { id: "trades", label: "Trade History" },
-    { id: "performance", label: "Performance" },
-  ];
+  const totalPositionPnL = positions.reduce((sum, pos) => sum + pos.pnl, 0);
+  const winningTrades = trades.filter((trade) => trade.pnl > 0).length;
+  const losingTrades = trades.filter((trade) => trade.pnl < 0).length;
+  const winRate = trades.length > 0 ? (winningTrades / trades.length) * 100 : 0;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-gray-50 p-8">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Portfolio</h1>
-            <p className="text-gray-600 mt-1">Track your trading performance and positions</p>
-          </div>
-          <div className="flex items-center space-x-4">
-            <select
-              value={timeframe}
-              onChange={(e) => setTimeframe(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="1D">1 Day</option>
-              <option value="1W">1 Week</option>
-              <option value="1M">1 Month</option>
-              <option value="3M">3 Months</option>
-              <option value="1Y">1 Year</option>
-            </select>
-          </div>
-        </div>
+        <h1 className="text-3xl font-bold text-gray-900 mb-8">Portfolio</h1>
 
-        {/* Key Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white p-6 rounded-lg shadow">
+        {/* Portfolio Overview Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <div className="bg-white rounded-lg shadow-lg p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Total Balance</p>
+                <h3 className="text-sm font-medium text-gray-500 mb-2">Total Balance</h3>
                 <p className="text-2xl font-bold text-gray-900">
-                  ${liveData.totalBalance.toLocaleString()}
+                  ${portfolioData.totalBalance.toLocaleString()}
                 </p>
               </div>
               <div className="p-3 rounded-full bg-blue-100">
@@ -185,41 +144,62 @@ export default function Portfolio() {
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-lg shadow">
+          <div className="bg-white rounded-lg shadow-lg p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Total P&L</p>
+                <h3 className="text-sm font-medium text-gray-500 mb-2">Total P&L</h3>
                 <p
-                  className={`text-2xl font-bold ${totalPnL >= 0 ? "text-green-600" : "text-red-600"}`}
+                  className={`text-2xl font-bold ${portfolioData.totalPnL >= 0 ? "text-green-600" : "text-red-600"}`}
                 >
-                  ${totalPnL.toFixed(2)}
+                  ${portfolioData.totalPnL.toFixed(2)}
+                </p>
+                <p
+                  className={`text-sm ${portfolioData.totalPnLPercentage >= 0 ? "text-green-600" : "text-red-600"}`}
+                >
+                  {portfolioData.totalPnLPercentage >= 0 ? "+" : ""}
+                  {portfolioData.totalPnLPercentage.toFixed(2)}%
                 </p>
               </div>
-              <div className={`p-3 rounded-full ${totalPnL >= 0 ? "bg-green-100" : "bg-red-100"}`}>
+              <div
+                className={`p-3 rounded-full ${portfolioData.totalPnL >= 0 ? "bg-green-100" : "bg-red-100"}`}
+              >
                 <div
-                  className={`w-6 h-6 ${totalPnL >= 0 ? "bg-green-600" : "bg-red-600"} rounded`}
+                  className={`w-6 h-6 ${portfolioData.totalPnL >= 0 ? "bg-green-600" : "bg-red-600"} rounded`}
                 ></div>
               </div>
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-lg shadow">
+          <div className="bg-white rounded-lg shadow-lg p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Win Rate</p>
-                <p className="text-2xl font-bold text-gray-900">{winRate.toFixed(1)}%</p>
+                <h3 className="text-sm font-medium text-gray-500 mb-2">Today&apos;s P&L</h3>
+                <p
+                  className={`text-2xl font-bold ${portfolioData.todayPnL >= 0 ? "text-green-600" : "text-red-600"}`}
+                >
+                  ${portfolioData.todayPnL.toFixed(2)}
+                </p>
               </div>
-              <div className="p-3 rounded-full bg-purple-100">
-                <div className="w-6 h-6 bg-purple-600 rounded"></div>
+              <div
+                className={`p-3 rounded-full ${portfolioData.todayPnL >= 0 ? "bg-green-100" : "bg-red-100"}`}
+              >
+                <div
+                  className={`w-6 h-6 ${portfolioData.todayPnL >= 0 ? "bg-green-600" : "bg-red-600"} rounded`}
+                ></div>
               </div>
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-lg shadow">
+          <div className="bg-white rounded-lg shadow-lg p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Active Positions</p>
-                <p className="text-2xl font-bold text-gray-900">{liveData.positions.length}</p>
+                <h3 className="text-sm font-medium text-gray-500 mb-2">Open Positions</h3>
+                <p className="text-2xl font-bold text-gray-900">{positions.length}</p>
+                <p
+                  className={`text-sm ${totalPositionPnL >= 0 ? "text-green-600" : "text-red-600"}`}
+                >
+                  ${totalPositionPnL.toFixed(2)} P&L
+                </p>
               </div>
               <div className="p-3 rounded-full bg-orange-100">
                 <div className="w-6 h-6 bg-orange-600 rounded"></div>
@@ -228,16 +208,23 @@ export default function Portfolio() {
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="bg-white rounded-lg shadow mb-8">
+        {/* Tab Navigation */}
+        <div className="bg-white rounded-lg shadow-lg">
           <div className="border-b border-gray-200">
             <nav className="flex space-x-8 px-6">
-              {tabs.map((tab) => (
+              {[
+                { id: "overview", label: "Overview" },
+                { id: "positions", label: "Open Positions" },
+                { id: "trades", label: "Trade History" },
+                { id: "performance", label: "Performance" },
+              ].map((tab) => (
                 <button
                   key={tab.id}
-                  onClick={() => setSelectedTab(tab.id as any)}
-                  className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                    selectedTab === tab.id
+                  onClick={() =>
+                    setActiveTab(tab.id as "overview" | "positions" | "trades" | "performance")
+                  }
+                  className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                    activeTab === tab.id
                       ? "border-blue-500 text-blue-600"
                       : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
                   }`}
@@ -249,149 +236,164 @@ export default function Portfolio() {
           </div>
 
           <div className="p-6">
-            {selectedTab === "overview" && (
+            {/* Overview Tab */}
+            {activeTab === "overview" && (
               <div className="space-y-6">
-                {/* Portfolio Summary */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Account Summary */}
                   <div>
-                    <h3 className="text-lg font-semibold mb-4">Portfolio Summary</h3>
+                    <h3 className="text-lg font-semibold mb-4">Account Summary</h3>
                     <div className="space-y-3">
                       <div className="flex justify-between">
-                        <span className="text-gray-600">Cash Balance:</span>
-                        <span className="font-semibold">
-                          ${liveData.totalBalance.toLocaleString()}
+                        <span className="text-gray-600">Balance:</span>
+                        <span className="font-medium">
+                          ${portfolioData.totalBalance.toLocaleString()}
                         </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-600">Unrealized P&L:</span>
-                        <span
-                          className={`font-semibold ${totalUnrealizedPnL >= 0 ? "text-green-600" : "text-red-600"}`}
-                        >
-                          ${totalUnrealizedPnL.toFixed(2)}
+                        <span className="text-gray-600">Equity:</span>
+                        <span className="font-medium">
+                          ${portfolioData.equity.toLocaleString()}
                         </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-600">Realized P&L:</span>
-                        <span
-                          className={`font-semibold ${totalRealizedPnL >= 0 ? "text-green-600" : "text-red-600"}`}
-                        >
-                          ${totalRealizedPnL.toFixed(2)}
+                        <span className="text-gray-600">Free Margin:</span>
+                        <span className="font-medium">
+                          ${portfolioData.freeMargin.toLocaleString()}
                         </span>
                       </div>
-                      <div className="flex justify-between border-t pt-3">
-                        <span className="text-gray-900 font-semibold">Total Value:</span>
-                        <span className="font-bold text-lg">
-                          ${(liveData.totalBalance + totalPnL).toFixed(2)}
-                        </span>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Margin Level:</span>
+                        <span className="font-medium">{portfolioData.marginLevel}%</span>
                       </div>
                     </div>
                   </div>
 
+                  {/* Trading Statistics */}
                   <div>
                     <h3 className="text-lg font-semibold mb-4">Trading Statistics</h3>
                     <div className="space-y-3">
                       <div className="flex justify-between">
                         <span className="text-gray-600">Total Trades:</span>
-                        <span className="font-semibold">{liveData.recentTrades.length}</span>
+                        <span className="font-medium">{trades.length}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-600">Winning Trades:</span>
-                        <span className="font-semibold text-green-600">{winningTrades}</span>
+                        <span className="font-medium text-green-600">{winningTrades}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-600">Losing Trades:</span>
-                        <span className="font-semibold text-red-600">
-                          {liveData.recentTrades.length - winningTrades}
-                        </span>
+                        <span className="font-medium text-red-600">{losingTrades}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-600">Win Rate:</span>
-                        <span className="font-semibold">{winRate.toFixed(1)}%</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Active Bots:</span>
-                        <span className="font-semibold">
-                          {bots?.filter((bot) => bot.isActive).length || 0}
-                        </span>
+                        <span className="font-medium">{winRate.toFixed(1)}%</span>
                       </div>
                     </div>
+                  </div>
+                </div>
+
+                {/* Quick Actions */}
+                <div>
+                  <h3 className="text-lg font-semibold mb-4">Quick Actions</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <button className="p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
+                      <div className="text-2xl mb-2">📊</div>
+                      <div className="font-medium">View Analytics</div>
+                      <div className="text-sm text-gray-600">Detailed performance analysis</div>
+                    </button>
+                    <button className="p-4 bg-green-50 rounded-lg hover:bg-green-100 transition-colors">
+                      <div className="text-2xl mb-2">💰</div>
+                      <div className="font-medium">Deposit Funds</div>
+                      <div className="text-sm text-gray-600">Add money to your account</div>
+                    </button>
+                    <button className="p-4 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors">
+                      <div className="text-2xl mb-2">📈</div>
+                      <div className="font-medium">Export Report</div>
+                      <div className="text-sm text-gray-600">Download trading report</div>
+                    </button>
                   </div>
                 </div>
               </div>
             )}
 
-            {selectedTab === "positions" && (
+            {/* Open Positions Tab */}
+            {activeTab === "positions" && (
               <div>
-                <h3 className="text-lg font-semibold mb-4">Open Positions</h3>
-                {liveData.positions.length > 0 ? (
+                {positions.length > 0 ? (
                   <div className="overflow-x-auto">
-                    <table className="w-full">
+                    <table className="min-w-full divide-y divide-gray-200">
                       <thead className="bg-gray-50">
                         <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Symbol
                           </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                            Side
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Type
                           </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Size
                           </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Entry Price
                           </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Current Price
                           </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             P&L
                           </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                            Bot
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Open Time
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Actions
                           </th>
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
-                        {liveData.positions.map((position) => (
+                        {positions.map((position) => (
                           <tr key={position.id} className="hover:bg-gray-50">
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                               {position.symbol}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
                               <span
-                                className={`px-2 py-1 text-xs rounded-full ${
-                                  position.side === "long"
+                                className={`px-2 py-1 text-xs font-medium rounded-full ${
+                                  position.type === "BUY"
                                     ? "bg-green-100 text-green-800"
                                     : "bg-red-100 text-red-800"
                                 }`}
                               >
-                                {position.side.toUpperCase()}
+                                {position.type}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {position.size}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {position.entryPrice.toFixed(5)}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {position.currentPrice.toFixed(5)}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                              <span
+                                className={position.pnl >= 0 ? "text-green-600" : "text-red-600"}
+                              >
+                                ${position.pnl.toFixed(2)}
                               </span>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {position.size.toLocaleString()}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {position.entryPrice.toFixed(4)}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {position.currentPrice.toFixed(4)}
-                            </td>
-                            <td
-                              className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${
-                                position.unrealizedPnL >= 0 ? "text-green-600" : "text-red-600"
-                              }`}
-                            >
-                              ${position.unrealizedPnL.toFixed(2)}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {position.botName || "Manual"}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                               {new Date(position.openTime).toLocaleString()}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                              <button
+                                onClick={() => handleClosePosition(position.id)}
+                                className="text-red-600 hover:text-red-900 transition-colors"
+                              >
+                                Close
+                              </button>
                             </td>
                           </tr>
                         ))}
@@ -399,88 +401,89 @@ export default function Portfolio() {
                     </table>
                   </div>
                 ) : (
-                  <p className="text-center py-8 text-gray-500">No open positions</p>
+                  <div className="text-center py-12">
+                    <div className="text-gray-400 text-6xl mb-4">📊</div>
+                    <p className="text-gray-500 mb-4">No open positions</p>
+                    <a
+                      href="/bots"
+                      className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
+                    >
+                      Start Trading
+                    </a>
+                  </div>
                 )}
               </div>
             )}
 
-            {selectedTab === "trades" && (
+            {/* Trade History Tab */}
+            {activeTab === "trades" && (
               <div>
-                <h3 className="text-lg font-semibold mb-4">Recent Trades</h3>
-                {liveData.recentTrades.length > 0 ? (
+                {trades.length > 0 ? (
                   <div className="overflow-x-auto">
-                    <table className="w-full">
+                    <table className="min-w-full divide-y divide-gray-200">
                       <thead className="bg-gray-50">
                         <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Symbol
                           </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                            Side
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Type
                           </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Size
                           </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                            Entry
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Entry Price
                           </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                            Exit
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Exit Price
                           </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             P&L
                           </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                            Bot
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Duration
                           </th>
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
-                        {liveData.recentTrades.map((trade) => (
+                        {trades.map((trade) => (
                           <tr key={trade.id} className="hover:bg-gray-50">
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                               {trade.symbol}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
                               <span
-                                className={`px-2 py-1 text-xs rounded-full ${
-                                  trade.side === "long"
+                                className={`px-2 py-1 text-xs font-medium rounded-full ${
+                                  trade.type === "BUY"
                                     ? "bg-green-100 text-green-800"
                                     : "bg-red-100 text-red-800"
                                 }`}
                               >
-                                {trade.side.toUpperCase()}
+                                {trade.type}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {trade.size}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {trade.entryPrice.toFixed(5)}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {trade.exitPrice.toFixed(5)}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                              <span className={trade.pnl >= 0 ? "text-green-600" : "text-red-600"}>
+                                ${trade.pnl.toFixed(2)}
                               </span>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {trade.size.toLocaleString()}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {trade.entryPrice.toFixed(4)}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {trade.exitPrice?.toFixed(4)}
-                            </td>
-                            <td
-                              className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${
-                                trade.profitLoss >= 0 ? "text-green-600" : "text-red-600"
-                              }`}
-                            >
-                              ${trade.profitLoss.toFixed(2)}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {trade.botName || "Manual"}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {trade.closeTime &&
-                              new Date(trade.closeTime).getTime() -
-                                new Date(trade.openTime).getTime() >
-                                0
-                                ? `${Math.round((new Date(trade.closeTime).getTime() - new Date(trade.openTime).getTime()) / 60000)}m`
-                                : "-"}
+                              {Math.round(
+                                (new Date(trade.closeTime).getTime() -
+                                  new Date(trade.openTime).getTime()) /
+                                  (1000 * 60 * 60),
+                              )}
+                              h
                             </td>
                           </tr>
                         ))}
@@ -488,74 +491,47 @@ export default function Portfolio() {
                     </table>
                   </div>
                 ) : (
-                  <p className="text-center py-8 text-gray-500">No trades yet</p>
+                  <div className="text-center py-12">
+                    <div className="text-gray-400 text-6xl mb-4">📈</div>
+                    <p className="text-gray-500">No trade history available</p>
+                  </div>
                 )}
               </div>
             )}
 
-            {selectedTab === "performance" && (
+            {/* Performance Tab */}
+            {activeTab === "performance" && (
               <div className="space-y-6">
-                <h3 className="text-lg font-semibold">Performance Analysis</h3>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <h4 className="font-semibold text-gray-900 mb-2">Daily Performance</h4>
-                    <p
-                      className={`text-xl font-bold ${liveData.dayChange >= 0 ? "text-green-600" : "text-red-600"}`}
-                    >
-                      ${liveData.dayChange.toFixed(2)}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="bg-blue-50 rounded-lg p-6">
+                    <h4 className="font-semibold text-blue-900 mb-2">Total Return</h4>
+                    <p className="text-2xl font-bold text-blue-700">
+                      {portfolioData.totalPnLPercentage.toFixed(2)}%
                     </p>
-                    <p
-                      className={`text-sm ${liveData.dayChangePercent >= 0 ? "text-green-600" : "text-red-600"}`}
-                    >
-                      {liveData.dayChangePercent >= 0 ? "+" : ""}
-                      {liveData.dayChangePercent.toFixed(2)}%
+                    <p className="text-sm text-blue-600">Since inception</p>
+                  </div>
+                  <div className="bg-green-50 rounded-lg p-6">
+                    <h4 className="font-semibold text-green-900 mb-2">Win Rate</h4>
+                    <p className="text-2xl font-bold text-green-700">{winRate.toFixed(1)}%</p>
+                    <p className="text-sm text-green-600">
+                      {winningTrades} of {trades.length} trades
                     </p>
                   </div>
-
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <h4 className="font-semibold text-gray-900 mb-2">Weekly Performance</h4>
-                    <p
-                      className={`text-xl font-bold ${liveData.weekChange >= 0 ? "text-green-600" : "text-red-600"}`}
-                    >
-                      ${liveData.weekChange.toFixed(2)}
+                  <div className="bg-purple-50 rounded-lg p-6">
+                    <h4 className="font-semibold text-purple-900 mb-2">Best Trade</h4>
+                    <p className="text-2xl font-bold text-purple-700">
+                      ${Math.max(...trades.map((t) => t.pnl)).toFixed(2)}
                     </p>
-                    <p
-                      className={`text-sm ${liveData.weekChange >= 0 ? "text-green-600" : "text-red-600"}`}
-                    >
-                      {liveData.weekChange >= 0 ? "+" : ""}
-                      {((liveData.weekChange / liveData.totalBalance) * 100).toFixed(2)}%
-                    </p>
-                  </div>
-
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <h4 className="font-semibold text-gray-900 mb-2">Monthly Performance</h4>
-                    <p
-                      className={`text-xl font-bold ${liveData.monthChange >= 0 ? "text-green-600" : "text-red-600"}`}
-                    >
-                      ${liveData.monthChange.toFixed(2)}
-                    </p>
-                    <p
-                      className={`text-sm ${liveData.monthChange >= 0 ? "text-green-600" : "text-red-600"}`}
-                    >
-                      {liveData.monthChange >= 0 ? "+" : ""}
-                      {((liveData.monthChange / liveData.totalBalance) * 100).toFixed(2)}%
-                    </p>
+                    <p className="text-sm text-purple-600">Single trade profit</p>
                   </div>
                 </div>
 
-                <div className="bg-gray-50 p-6 rounded-lg">
-                  <h4 className="font-semibold text-gray-900 mb-4">Trading Insights</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <h5 className="font-medium text-gray-700 mb-2">Best Performing Symbol</h5>
-                      <p className="text-lg font-semibold">USDJPY</p>
-                      <p className="text-sm text-green-600">+$159.84 profit</p>
-                    </div>
-                    <div>
-                      <h5 className="font-medium text-gray-700 mb-2">Most Active Bot</h5>
-                      <p className="text-lg font-semibold">EUR Scalper</p>
-                      <p className="text-sm text-blue-600">Currently active</p>
+                <div className="bg-gray-50 rounded-lg p-6">
+                  <h4 className="font-semibold mb-4">Performance Chart</h4>
+                  <div className="h-64 flex items-center justify-center border-2 border-dashed border-gray-300 rounded-lg">
+                    <div className="text-center text-gray-500">
+                      <div className="text-4xl mb-2">📊</div>
+                      <p>Performance chart coming soon</p>
                     </div>
                   </div>
                 </div>

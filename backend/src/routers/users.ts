@@ -1,36 +1,68 @@
-import { router, publicProcedure } from "../trpc";
 import { z } from "zod";
+import { router, publicProcedure } from "../trpc";
 
 export const usersRouter = router({
-  getProfile: publicProcedure
-    .input(z.object({ userId: z.string() }))
-    .query(async ({ ctx, input }) => {
-      return ctx.prisma.user.findUnique({
-        where: { id: input.userId },
-        include: { bots: true, strategies: true, portfolios: true },
-      });
-    }),
+  me: publicProcedure.query(async ({ ctx }) => {
+    // For demo purposes, return a mock user
+    return {
+      id: "demo-user",
+      email: "demo@example.com",
+      name: "Demo User",
+    };
+  }),
 
-  createUser: publicProcedure
+  create: publicProcedure
     .input(
       z.object({
         email: z.string().email(),
-        clerkId: z.string().optional(),
+        name: z.string().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      return ctx.prisma.user.create({
+      return await ctx.prisma.user.create({
         data: {
           email: input.email,
-          clerkId: input.clerkId,
-          portfolios: {
-            create: {
-              name: "Main Portfolio",
-              balance: 10000, // Starting balance
+          name: input.name,
+        },
+      });
+    }),
+
+  update: publicProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        name: z.string().optional(),
+        email: z.string().email().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { id, ...updateData } = input;
+      return await ctx.prisma.user.update({
+        where: { id },
+        data: updateData,
+      });
+    }),
+
+  delete: publicProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
+    return await ctx.prisma.user.delete({
+      where: { id: input.id },
+    });
+  }),
+
+  getProfile: publicProcedure
+    .input(z.object({ userId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      return await ctx.prisma.user.findUnique({
+        where: { id: input.userId },
+        include: {
+          bots: {
+            include: {
+              trades: true,
             },
           },
+          strategies: true,
+          portfolios: true,
         },
-        include: { portfolios: true },
       });
     }),
 });
