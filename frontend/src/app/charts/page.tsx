@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useUser } from "@clerk/nextjs";
+import { getCurrentUserId } from "../../lib/dev-auth";
 
 interface ChartImage {
   id: string;
@@ -18,7 +20,9 @@ interface TechnicalIndicator {
 }
 
 export default function ChartsPage() {
-  // const userId = "demo-user"; // Commented out as it's not used yet
+  // Get user from Clerk or use dev user in development
+  const { user } = useUser();
+  const userId = user?.id || getCurrentUserId();
 
   // Mock chart data
   const [chartImages] = useState<ChartImage[]>([
@@ -108,10 +112,29 @@ export default function ChartsPage() {
     }
   };
 
+  // Show loading state if user is not available yet
+  if (!userId) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-8 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading user data...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
+    <div className="min-h-screen bg-gray-50 p-8 pb-32">
       <div className="max-w-7xl mx-auto">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">Trading Charts</h1>
+        <div className="flex items-center justify-between mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">Trading Charts</h1>
+          {user && (
+            <div className="text-sm text-gray-600">
+              Charts for {user.firstName || user.emailAddresses[0]?.emailAddress || "Trader"}
+            </div>
+          )}
+        </div>
 
         {/* Tab Navigation */}
         <div className="bg-white rounded-lg shadow-lg mb-8">

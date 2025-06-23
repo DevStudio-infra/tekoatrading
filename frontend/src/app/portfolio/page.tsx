@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { useUser } from "@clerk/nextjs";
+import { getCurrentUserId } from "../../lib/dev-auth";
 
 interface Position {
   id: string;
@@ -26,204 +28,153 @@ interface Trade {
 }
 
 export default function PortfolioPage() {
-  // Mock portfolio data - in a real app, this would come from tRPC
+  // Get user from Clerk or use dev user in development
+  const { user } = useUser();
+  const userId = user?.id || getCurrentUserId();
+
+  const [activeTab, setActiveTab] = useState("overview");
+
+  // Mock data - in a real app, this would come from tRPC queries
   const [portfolioData] = useState({
-    totalBalance: 10000,
-    totalPnL: 1250.75,
-    totalPnLPercentage: 12.51,
-    openPositions: 3,
-    todayPnL: 125.5,
-    equity: 11250.75,
-    freeMargin: 9250.75,
-    marginLevel: 562,
+    accountBalance: 50000,
+    equity: 53875.5,
+    margin: 2500,
+    freeMargin: 51375.5,
+    marginLevel: 2155.02,
+    profit: 3875.5,
+    todayPnL: 125.75,
+    weeklyPnL: 892.3,
+    monthlyPnL: 2450.8,
   });
 
-  const [positions] = useState<Position[]>([
+  const [positions] = useState([
     {
       id: "1",
       symbol: "EURUSD",
       type: "BUY",
-      size: 1.0,
-      entryPrice: 1.085,
+      volume: 1.0,
+      openPrice: 1.085,
       currentPrice: 1.0875,
       pnl: 250.0,
-      openTime: new Date().toISOString(),
+      swap: -2.5,
+      openTime: "2024-01-15 10:30:00",
     },
     {
       id: "2",
       symbol: "GBPUSD",
       type: "SELL",
-      size: 0.5,
-      entryPrice: 1.265,
+      volume: 0.5,
+      openPrice: 1.264,
       currentPrice: 1.2625,
       pnl: 125.0,
-      openTime: new Date().toISOString(),
+      swap: -1.25,
+      openTime: "2024-01-15 14:15:00",
     },
     {
       id: "3",
       symbol: "USDJPY",
       type: "BUY",
-      size: 0.8,
-      entryPrice: 149.5,
-      currentPrice: 149.25,
-      pnl: -200.0,
-      openTime: new Date().toISOString(),
+      volume: 0.8,
+      openPrice: 149.5,
+      currentPrice: 150.25,
+      pnl: -75.5,
+      swap: 3.2,
+      openTime: "2024-01-16 08:45:00",
     },
   ]);
 
-  const [trades] = useState<Trade[]>([
+  const [trades] = useState([
     {
       id: "1",
-      symbol: "USDJPY",
+      symbol: "EURUSD",
       type: "BUY",
-      size: 1.0,
-      entryPrice: 149.5,
-      exitPrice: 150.25,
-      pnl: 500.0,
-      openTime: new Date(Date.now() - 86400000).toISOString(),
-      closeTime: new Date().toISOString(),
+      volume: 0.5,
+      openPrice: 1.082,
+      closePrice: 1.0865,
+      pnl: 225.0,
+      duration: "2h 15m",
+      openTime: "2024-01-14 09:30:00",
+      closeTime: "2024-01-14 11:45:00",
     },
     {
       id: "2",
-      symbol: "AUDUSD",
+      symbol: "GBPUSD",
       type: "SELL",
-      size: 0.8,
-      entryPrice: 0.675,
-      exitPrice: 0.6725,
-      pnl: 200.0,
-      openTime: new Date(Date.now() - 172800000).toISOString(),
-      closeTime: new Date(Date.now() - 86400000).toISOString(),
+      volume: 1.0,
+      openPrice: 1.268,
+      closePrice: 1.265,
+      pnl: 300.0,
+      duration: "4h 20m",
+      openTime: "2024-01-13 13:20:00",
+      closeTime: "2024-01-13 17:40:00",
     },
     {
       id: "3",
-      symbol: "EURUSD",
+      symbol: "USDJPY",
       type: "BUY",
-      size: 0.5,
-      entryPrice: 1.0825,
-      exitPrice: 1.0875,
-      pnl: 250.0,
-      openTime: new Date(Date.now() - 259200000).toISOString(),
-      closeTime: new Date(Date.now() - 172800000).toISOString(),
+      volume: 0.3,
+      openPrice: 148.8,
+      closePrice: 148.2,
+      pnl: -180.0,
+      duration: "1h 35m",
+      openTime: "2024-01-12 16:10:00",
+      closeTime: "2024-01-12 17:45:00",
     },
   ]);
 
-  const [activeTab, setActiveTab] = useState<"overview" | "positions" | "trades" | "performance">(
-    "overview",
-  );
+  // Show loading state if user is not available yet
+  if (!userId) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-8 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading user data...</p>
+        </div>
+      </div>
+    );
+  }
 
   const handleClosePosition = (positionId: string) => {
     if (confirm("Are you sure you want to close this position?")) {
-      console.log("Closing position:", positionId);
       // In a real app, this would call a tRPC mutation
+      console.log("Closing position:", positionId);
+      alert("Position closed successfully!");
     }
   };
 
-  const totalPositionPnL = positions.reduce((sum, pos) => sum + pos.pnl, 0);
-  const winningTrades = trades.filter((trade) => trade.pnl > 0).length;
-  const losingTrades = trades.filter((trade) => trade.pnl < 0).length;
-  const winRate = trades.length > 0 ? (winningTrades / trades.length) * 100 : 0;
+  const calculateWinRate = () => {
+    const winningTrades = trades.filter((trade) => trade.pnl > 0).length;
+    return trades.length > 0 ? ((winningTrades / trades.length) * 100).toFixed(1) : "0.0";
+  };
+
+  const tabs = [
+    { id: "overview", label: "Overview" },
+    { id: "positions", label: "Positions" },
+    { id: "trades", label: "Trades" },
+    { id: "performance", label: "Performance" },
+  ];
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
+    <div className="min-h-screen bg-gray-50 p-8 pb-32">
       <div className="max-w-7xl mx-auto">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">Portfolio</h1>
-
-        {/* Portfolio Overview Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white rounded-lg shadow-lg p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-medium text-gray-500 mb-2">Total Balance</h3>
-                <p className="text-2xl font-bold text-gray-900">
-                  ${portfolioData.totalBalance.toLocaleString()}
-                </p>
-              </div>
-              <div className="p-3 rounded-full bg-blue-100">
-                <div className="w-6 h-6 bg-blue-600 rounded"></div>
-              </div>
+        <div className="flex items-center justify-between mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">Portfolio</h1>
+          {user && (
+            <div className="text-sm text-gray-600">
+              Portfolio for {user.firstName || user.emailAddresses[0]?.emailAddress || "Trader"}
             </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-lg p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-medium text-gray-500 mb-2">Total P&L</h3>
-                <p
-                  className={`text-2xl font-bold ${portfolioData.totalPnL >= 0 ? "text-green-600" : "text-red-600"}`}
-                >
-                  ${portfolioData.totalPnL.toFixed(2)}
-                </p>
-                <p
-                  className={`text-sm ${portfolioData.totalPnLPercentage >= 0 ? "text-green-600" : "text-red-600"}`}
-                >
-                  {portfolioData.totalPnLPercentage >= 0 ? "+" : ""}
-                  {portfolioData.totalPnLPercentage.toFixed(2)}%
-                </p>
-              </div>
-              <div
-                className={`p-3 rounded-full ${portfolioData.totalPnL >= 0 ? "bg-green-100" : "bg-red-100"}`}
-              >
-                <div
-                  className={`w-6 h-6 ${portfolioData.totalPnL >= 0 ? "bg-green-600" : "bg-red-600"} rounded`}
-                ></div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-lg p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-medium text-gray-500 mb-2">Today&apos;s P&L</h3>
-                <p
-                  className={`text-2xl font-bold ${portfolioData.todayPnL >= 0 ? "text-green-600" : "text-red-600"}`}
-                >
-                  ${portfolioData.todayPnL.toFixed(2)}
-                </p>
-              </div>
-              <div
-                className={`p-3 rounded-full ${portfolioData.todayPnL >= 0 ? "bg-green-100" : "bg-red-100"}`}
-              >
-                <div
-                  className={`w-6 h-6 ${portfolioData.todayPnL >= 0 ? "bg-green-600" : "bg-red-600"} rounded`}
-                ></div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-lg p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-medium text-gray-500 mb-2">Open Positions</h3>
-                <p className="text-2xl font-bold text-gray-900">{positions.length}</p>
-                <p
-                  className={`text-sm ${totalPositionPnL >= 0 ? "text-green-600" : "text-red-600"}`}
-                >
-                  ${totalPositionPnL.toFixed(2)} P&L
-                </p>
-              </div>
-              <div className="p-3 rounded-full bg-orange-100">
-                <div className="w-6 h-6 bg-orange-600 rounded"></div>
-              </div>
-            </div>
-          </div>
+          )}
         </div>
 
         {/* Tab Navigation */}
-        <div className="bg-white rounded-lg shadow-lg">
+        <div className="bg-white rounded-lg shadow-lg mb-8">
           <div className="border-b border-gray-200">
             <nav className="flex space-x-8 px-6">
-              {[
-                { id: "overview", label: "Overview" },
-                { id: "positions", label: "Open Positions" },
-                { id: "trades", label: "Trade History" },
-                { id: "performance", label: "Performance" },
-              ].map((tab) => (
+              {tabs.map((tab) => (
                 <button
                   key={tab.id}
-                  onClick={() =>
-                    setActiveTab(tab.id as "overview" | "positions" | "trades" | "performance")
-                  }
-                  className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`py-4 px-1 border-b-2 font-medium text-sm ${
                     activeTab === tab.id
                       ? "border-blue-500 text-blue-600"
                       : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
@@ -239,87 +190,78 @@ export default function PortfolioPage() {
             {/* Overview Tab */}
             {activeTab === "overview" && (
               <div className="space-y-6">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Account Summary */}
-                  <div>
-                    <h3 className="text-lg font-semibold mb-4">Account Summary</h3>
-                    <div className="space-y-3">
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Balance:</span>
-                        <span className="font-medium">
-                          ${portfolioData.totalBalance.toLocaleString()}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Equity:</span>
-                        <span className="font-medium">
-                          ${portfolioData.equity.toLocaleString()}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Free Margin:</span>
-                        <span className="font-medium">
-                          ${portfolioData.freeMargin.toLocaleString()}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Margin Level:</span>
-                        <span className="font-medium">{portfolioData.marginLevel}%</span>
-                      </div>
+                {/* Account Summary */}
+                <div>
+                  <h2 className="text-xl font-semibold mb-4">Account Summary</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div className="bg-blue-50 rounded-lg p-4">
+                      <p className="text-sm font-medium text-blue-600">Account Balance</p>
+                      <p className="text-2xl font-bold text-blue-900">
+                        ${portfolioData.accountBalance.toLocaleString()}
+                      </p>
                     </div>
-                  </div>
-
-                  {/* Trading Statistics */}
-                  <div>
-                    <h3 className="text-lg font-semibold mb-4">Trading Statistics</h3>
-                    <div className="space-y-3">
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Total Trades:</span>
-                        <span className="font-medium">{trades.length}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Winning Trades:</span>
-                        <span className="font-medium text-green-600">{winningTrades}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Losing Trades:</span>
-                        <span className="font-medium text-red-600">{losingTrades}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Win Rate:</span>
-                        <span className="font-medium">{winRate.toFixed(1)}%</span>
-                      </div>
+                    <div className="bg-green-50 rounded-lg p-4">
+                      <p className="text-sm font-medium text-green-600">Equity</p>
+                      <p className="text-2xl font-bold text-green-900">
+                        ${portfolioData.equity.toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="bg-orange-50 rounded-lg p-4">
+                      <p className="text-sm font-medium text-orange-600">Margin Used</p>
+                      <p className="text-2xl font-bold text-orange-900">
+                        ${portfolioData.margin.toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="bg-purple-50 rounded-lg p-4">
+                      <p className="text-sm font-medium text-purple-600">Free Margin</p>
+                      <p className="text-2xl font-bold text-purple-900">
+                        ${portfolioData.freeMargin.toLocaleString()}
+                      </p>
                     </div>
                   </div>
                 </div>
 
-                {/* Quick Actions */}
+                {/* Trading Statistics */}
                 <div>
-                  <h3 className="text-lg font-semibold mb-4">Quick Actions</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <button className="p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
-                      <div className="text-2xl mb-2">📊</div>
-                      <div className="font-medium">View Analytics</div>
-                      <div className="text-sm text-gray-600">Detailed performance analysis</div>
-                    </button>
-                    <button className="p-4 bg-green-50 rounded-lg hover:bg-green-100 transition-colors">
-                      <div className="text-2xl mb-2">💰</div>
-                      <div className="font-medium">Deposit Funds</div>
-                      <div className="text-sm text-gray-600">Add money to your account</div>
-                    </button>
-                    <button className="p-4 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors">
-                      <div className="text-2xl mb-2">📈</div>
-                      <div className="font-medium">Export Report</div>
-                      <div className="text-sm text-gray-600">Download trading report</div>
-                    </button>
+                  <h2 className="text-xl font-semibold mb-4">Trading Statistics</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <p className="text-sm font-medium text-gray-600">Today's P&L</p>
+                      <p
+                        className={`text-xl font-bold ${portfolioData.todayPnL >= 0 ? "text-green-600" : "text-red-600"}`}
+                      >
+                        ${portfolioData.todayPnL.toFixed(2)}
+                      </p>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <p className="text-sm font-medium text-gray-600">Weekly P&L</p>
+                      <p
+                        className={`text-xl font-bold ${portfolioData.weeklyPnL >= 0 ? "text-green-600" : "text-red-600"}`}
+                      >
+                        ${portfolioData.weeklyPnL.toFixed(2)}
+                      </p>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <p className="text-sm font-medium text-gray-600">Monthly P&L</p>
+                      <p
+                        className={`text-xl font-bold ${portfolioData.monthlyPnL >= 0 ? "text-green-600" : "text-red-600"}`}
+                      >
+                        ${portfolioData.monthlyPnL.toFixed(2)}
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
             )}
 
-            {/* Open Positions Tab */}
+            {/* Positions Tab */}
             {activeTab === "positions" && (
               <div>
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-xl font-semibold">Open Positions</h2>
+                  <span className="text-sm text-gray-600">{positions.length} open positions</span>
+                </div>
+
                 {positions.length > 0 ? (
                   <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200">
@@ -332,10 +274,10 @@ export default function PortfolioPage() {
                             Type
                           </th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Size
+                            Volume
                           </th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Entry Price
+                            Open Price
                           </th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Current Price
@@ -369,13 +311,13 @@ export default function PortfolioPage() {
                               </span>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              {position.size}
+                              {position.volume}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              {position.entryPrice.toFixed(5)}
+                              {position.openPrice}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              {position.currentPrice.toFixed(5)}
+                              {position.currentPrice}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                               <span
@@ -385,12 +327,12 @@ export default function PortfolioPage() {
                               </span>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {new Date(position.openTime).toLocaleString()}
+                              {position.openTime}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                               <button
                                 onClick={() => handleClosePosition(position.id)}
-                                className="text-red-600 hover:text-red-900 transition-colors"
+                                className="text-red-600 hover:text-red-900 bg-red-100 hover:bg-red-200 px-3 py-1 rounded-lg transition-colors"
                               >
                                 Close
                               </button>
@@ -403,21 +345,20 @@ export default function PortfolioPage() {
                 ) : (
                   <div className="text-center py-12">
                     <div className="text-gray-400 text-6xl mb-4">📊</div>
-                    <p className="text-gray-500 mb-4">No open positions</p>
-                    <a
-                      href="/bots"
-                      className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
-                    >
-                      Start Trading
-                    </a>
+                    <p className="text-gray-500">No open positions</p>
                   </div>
                 )}
               </div>
             )}
 
-            {/* Trade History Tab */}
+            {/* Trades Tab */}
             {activeTab === "trades" && (
               <div>
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-xl font-semibold">Trade History</h2>
+                  <span className="text-sm text-gray-600">{trades.length} completed trades</span>
+                </div>
+
                 {trades.length > 0 ? (
                   <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200">
@@ -430,19 +371,22 @@ export default function PortfolioPage() {
                             Type
                           </th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Size
+                            Volume
                           </th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Entry Price
+                            Open Price
                           </th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Exit Price
+                            Close Price
                           </th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             P&L
                           </th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Duration
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Close Time
                           </th>
                         </tr>
                       </thead>
@@ -464,13 +408,13 @@ export default function PortfolioPage() {
                               </span>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              {trade.size}
+                              {trade.volume}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              {trade.entryPrice.toFixed(5)}
+                              {trade.openPrice}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              {trade.exitPrice.toFixed(5)}
+                              {trade.closePrice}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                               <span className={trade.pnl >= 0 ? "text-green-600" : "text-red-600"}>
@@ -478,12 +422,10 @@ export default function PortfolioPage() {
                               </span>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {Math.round(
-                                (new Date(trade.closeTime).getTime() -
-                                  new Date(trade.openTime).getTime()) /
-                                  (1000 * 60 * 60),
-                              )}
-                              h
+                              {trade.duration}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {trade.closeTime}
                             </td>
                           </tr>
                         ))}
@@ -493,7 +435,7 @@ export default function PortfolioPage() {
                 ) : (
                   <div className="text-center py-12">
                     <div className="text-gray-400 text-6xl mb-4">📈</div>
-                    <p className="text-gray-500">No trade history available</p>
+                    <p className="text-gray-500">No completed trades</p>
                   </div>
                 )}
               </div>
@@ -502,36 +444,70 @@ export default function PortfolioPage() {
             {/* Performance Tab */}
             {activeTab === "performance" && (
               <div className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="bg-blue-50 rounded-lg p-6">
-                    <h4 className="font-semibold text-blue-900 mb-2">Total Return</h4>
-                    <p className="text-2xl font-bold text-blue-700">
-                      {portfolioData.totalPnLPercentage.toFixed(2)}%
-                    </p>
-                    <p className="text-sm text-blue-600">Since inception</p>
+                <h2 className="text-xl font-semibold">Performance Analytics</h2>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                  <div className="bg-blue-50 rounded-lg p-4">
+                    <p className="text-sm font-medium text-blue-600">Total Trades</p>
+                    <p className="text-2xl font-bold text-blue-900">{trades.length}</p>
                   </div>
-                  <div className="bg-green-50 rounded-lg p-6">
-                    <h4 className="font-semibold text-green-900 mb-2">Win Rate</h4>
-                    <p className="text-2xl font-bold text-green-700">{winRate.toFixed(1)}%</p>
-                    <p className="text-sm text-green-600">
-                      {winningTrades} of {trades.length} trades
-                    </p>
+                  <div className="bg-green-50 rounded-lg p-4">
+                    <p className="text-sm font-medium text-green-600">Win Rate</p>
+                    <p className="text-2xl font-bold text-green-900">{calculateWinRate()}%</p>
                   </div>
-                  <div className="bg-purple-50 rounded-lg p-6">
-                    <h4 className="font-semibold text-purple-900 mb-2">Best Trade</h4>
-                    <p className="text-2xl font-bold text-purple-700">
+                  <div className="bg-purple-50 rounded-lg p-4">
+                    <p className="text-sm font-medium text-purple-600">Best Trade</p>
+                    <p className="text-2xl font-bold text-purple-900">
                       ${Math.max(...trades.map((t) => t.pnl)).toFixed(2)}
                     </p>
-                    <p className="text-sm text-purple-600">Single trade profit</p>
+                  </div>
+                  <div className="bg-red-50 rounded-lg p-4">
+                    <p className="text-sm font-medium text-red-600">Worst Trade</p>
+                    <p className="text-2xl font-bold text-red-900">
+                      ${Math.min(...trades.map((t) => t.pnl)).toFixed(2)}
+                    </p>
                   </div>
                 </div>
 
                 <div className="bg-gray-50 rounded-lg p-6">
-                  <h4 className="font-semibold mb-4">Performance Chart</h4>
-                  <div className="h-64 flex items-center justify-center border-2 border-dashed border-gray-300 rounded-lg">
-                    <div className="text-center text-gray-500">
-                      <div className="text-4xl mb-2">📊</div>
-                      <p>Performance chart coming soon</p>
+                  <h3 className="text-lg font-medium mb-4">Performance Metrics</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600 mb-2">Profit Factor</p>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div
+                          className="bg-green-600 h-2 rounded-full"
+                          style={{ width: "75%" }}
+                        ></div>
+                      </div>
+                      <p className="text-sm text-gray-600 mt-1">1.75</p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-600 mb-2">Sharpe Ratio</p>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div
+                          className="bg-blue-600 h-2 rounded-full"
+                          style={{ width: "60%" }}
+                        ></div>
+                      </div>
+                      <p className="text-sm text-gray-600 mt-1">1.2</p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-600 mb-2">Max Drawdown</p>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div className="bg-red-600 h-2 rounded-full" style={{ width: "25%" }}></div>
+                      </div>
+                      <p className="text-sm text-gray-600 mt-1">-5.2%</p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-600 mb-2">Recovery Factor</p>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div
+                          className="bg-purple-600 h-2 rounded-full"
+                          style={{ width: "80%" }}
+                        ></div>
+                      </div>
+                      <p className="text-sm text-gray-600 mt-1">3.2</p>
                     </div>
                   </div>
                 </div>
