@@ -4,6 +4,7 @@ import cors from "cors";
 import * as trpcExpress from "@trpc/server/adapters/express";
 import { appRouter, createContext } from "./routers/root";
 import { logger } from "./logger";
+import clerkWebhookRouter from "./routes/clerk-webhook.routes";
 
 dotenv.config();
 
@@ -17,6 +18,9 @@ app.use(express.json());
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
 });
+
+// Add Clerk webhook route
+app.use("/api/clerk-webhook", clerkWebhookRouter);
 
 app.use(
   "/trpc",
