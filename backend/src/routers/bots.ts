@@ -1,9 +1,10 @@
 import { z } from "zod";
-import { router, publicProcedure } from "../trpc";
+import { router, publicProcedure, protectedProcedure } from "../trpc";
 import { prisma } from "../prisma";
 import { botEvaluationService } from "../services/bot-evaluation.service";
 import { brokerIntegrationService } from "../services/broker-integration.service";
 import { logger } from "../logger";
+import { credentialsEncryption } from "../services/credentials-encryption.service";
 
 // Enhanced validation schemas
 const createBotSchema = z.object({
@@ -55,10 +56,10 @@ const brokerCredentialSchema = z.object({
 
 export const botsRouter = router({
   // Get all bots for a user
-  getAll: publicProcedure.input(z.object({ userId: z.string() })).query(async ({ input }) => {
+  getAll: protectedProcedure.query(async ({ ctx }) => {
     try {
       const bots = await prisma.bot.findMany({
-        where: { userId: input.userId },
+        where: { userId: ctx.user.id },
         include: {
           strategy: true,
           brokerCredential: {
@@ -216,64 +217,55 @@ export const botsRouter = router({
     }),
 
   // Update a bot
-  update: publicProcedure
-    .input(updateBotSchema.extend({ userId: z.string() }))
-    .mutation(async ({ input }) => {
-      try {
-        const { id, userId, ...updateData } = input;
+  update: protectedProcedure.input(updateBotSchema).mutation(async ({ input, ctx }) => {
+    try {
+      const { id, ...updateData } = input;
 
-        // Verify bot belongs to user
-        const existingBot = await prisma.bot.findFirst({
-          where: { id, userId },
-        });
+      // Verify bot belongs to user
+      const existingBot = await prisma.bot.findFirst({
+        where: { id, userId: ctx.user.id },
+      });
 
-        if (!existingBot) {
-          throw new Error("Bot not found or access denied");
-        }
+      if (!existingBot) {
+        throw new Error("Bot not found or access denied");
+      }
 
-        const bot = await prisma.bot.update({
-          where: { id },
-          data: updateData,
-          include: {
-            strategy: true,
-            brokerCredential: {
-              select: {
-                id: true,
-                name: true,
-                broker: true,
-                isDemo: true,
-              },
+      const bot = await prisma.bot.update({
+        where: { id },
+        data: updateData,
+        include: {
+          strategy: true,
+          brokerCredential: {
+            select: {
+              id: true,
+              name: true,
+              broker: true,
+              isDemo: true,
             },
+          },
+        },
+      });
+
+      logger.info(`Updated bot: ${bot.id} (${bot.name})`);
+      return bot;
+    } catch (error) {
+      logger.error("Error updating bot:", error);
+      throw new Error("Failed to update bot");
+    }
+  }),
+
+  // Delete a bot
+  delete: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      try {
+        await prisma.bot.delete({
+          where: {
+            id: input.id,
+            userId: ctx.user.id, // Ensure the bot belongs to the user
           },
         });
 
-        logger.info(`Updated bot: ${bot.id} (${bot.name})`);
-        return bot;
-      } catch (error) {
-        logger.error("Error updating bot:", error);
-        throw new Error("Failed to update bot");
-      }
-    }),
-
-  // Delete a bot
-  delete: publicProcedure
-    .input(z.object({ id: z.string(), userId: z.string() }))
-    .mutation(async ({ input }) => {
-      try {
-        // Verify bot belongs to user
-        const existingBot = await prisma.bot.findFirst({
-          where: { id: input.id, userId: input.userId },
-        });
-
-        if (!existingBot) {
-          throw new Error("Bot not found or access denied");
-        }
-
-        await prisma.bot.delete({
-          where: { id: input.id },
-        });
-
-        logger.info(`Deleted bot: ${input.id}`);
         return { success: true };
       } catch (error) {
         logger.error("Error deleting bot:", error);
@@ -283,24 +275,20 @@ export const botsRouter = router({
 
   // Toggle bot active status
   toggleActive: publicProcedure
-    .input(z.object({ id: z.string(), userId: z.string() }))
+    .input(z.object({ userId: z.string(), botId: z.string(), isActive: z.boolean() }))
     .mutation(async ({ input }) => {
       try {
-        const bot = await prisma.bot.findFirst({
-          where: { id: input.id, userId: input.userId },
+        const bot = await prisma.bot.update({
+          where: {
+            id: input.botId,
+            userId: input.userId, // Ensure the bot belongs to the user
+          },
+          data: {
+            isActive: input.isActive,
+          },
         });
 
-        if (!bot) {
-          throw new Error("Bot not found or access denied");
-        }
-
-        const updatedBot = await prisma.bot.update({
-          where: { id: input.id },
-          data: { isActive: !bot.isActive },
-        });
-
-        logger.info(`Toggled bot ${input.id} active status to ${updatedBot.isActive}`);
-        return updatedBot;
+        return bot;
       } catch (error) {
         logger.error("Error toggling bot status:", error);
         throw new Error("Failed to toggle bot status");
@@ -476,7 +464,9 @@ export const botsRouter = router({
         let livePositions: any[] = [];
         if (bot.brokerCredential && bot.brokerCredential.credentials) {
           try {
-            const credentials = bot.brokerCredential.credentials as any;
+            const credentials = credentialsEncryption.decryptCredentials(
+              bot.brokerCredential.credentials,
+            );
             livePositions = await brokerIntegrationService.getOpenPositions({
               apiKey: credentials.apiKey,
               identifier: credentials.identifier,
@@ -521,7 +511,7 @@ export const botsRouter = router({
             name: input.name,
             broker: input.broker,
             isDemo: input.isDemo,
-            credentials: input.credentials, // In production, this should be encrypted
+            credentials: credentialsEncryption.encryptCredentials(input.credentials), // Encrypt credentials
           },
         });
 
@@ -584,7 +574,7 @@ export const botsRouter = router({
           throw new Error("Broker credential not found");
         }
 
-        const credentials = credential.credentials as any;
+        const credentials = credentialsEncryption.decryptCredentials(credential.credentials);
         const result = await brokerIntegrationService.testConnection({
           apiKey: credentials.apiKey,
           identifier: credentials.identifier,

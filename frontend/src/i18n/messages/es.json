@@ -1,0 +1,122 @@
+{
+  "common": {
+    "home": "Inicio",
+    "dashboard": "Panel",
+    "bots": "Bots de Trading",
+    "portfolio": "Portafolio",
+    "analytics": "Analíticas",
+    "strategies": "Estrategias",
+    "charts": "Gráficos",
+    "trades": "Operaciones",
+    "settings": "Configuración",
+    "signIn": "Iniciar Sesión",
+    "signUp": "Registrarse",
+    "signOut": "Cerrar Sesión",
+    "loading": "Cargando...",
+    "error": "Error",
+    "success": "Éxito",
+    "cancel": "Cancelar",
+    "save": "Guardar",
+    "edit": "Editar",
+    "delete": "Eliminar",
+    "create": "Crear",
+    "back": "Atrás",
+    "next": "Siguiente",
+    "previous": "Anterior"
+  },
+  "nav": {
+    "welcome": "¡Bienvenido de nuevo, {name}!",
+    "welcomeGeneric": "¡Bienvenido de nuevo, Trader!"
+  },
+  "home": {
+    "title": "Plataforma de Trading Profesional",
+    "subtitle": "Automatiza tu trading con estrategias impulsadas por IA y análisis de mercado en tiempo real",
+    "getStarted": "Comenzar",
+    "learnMore": "Saber Más",
+    "whyChoose": "¿Por qué elegir Tekoa Trading?",
+    "features": {
+      "title": "Características Poderosas",
+      "aiTrading": {
+        "title": "Trading con IA",
+        "description": "Algoritmos avanzados de IA analizan tendencias del mercado y ejecutan operaciones automáticamente"
+      },
+      "riskManagement": {
+        "title": "Gestión de Riesgos",
+        "description": "Herramientas integradas de gestión de riesgos para proteger tus inversiones"
+      },
+      "realTimeData": {
+        "title": "Datos en Tiempo Real",
+        "description": "Acceso a datos de mercado en tiempo real y herramientas de gráficos avanzadas"
+      },
+      "aiPowered": {
+        "title": "Bots Impulsados por IA",
+        "description": "Algoritmos avanzados analizan tendencias del mercado y ejecutan operaciones con precisión y velocidad."
+      },
+      "realTimeAnalytics": {
+        "title": "Analíticas en Tiempo Real",
+        "description": "Monitorea el rendimiento de tu portafolio con analíticas detalladas y datos de mercado en vivo."
+      },
+      "secureReliable": {
+        "title": "Seguro y Confiable",
+        "description": "Seguridad de nivel bancario con 99.9% de tiempo activo garantiza que tus fondos y datos estén siempre protegidos."
+      }
+    },
+    "cta": {
+      "title": "¿Listo para empezar a operar?",
+      "subtitle": "Únete a miles de traders que confían en nuestra plataforma",
+      "start": "Empezar a Operar",
+      "createAccount": "Crear Cuenta"
+    }
+  },
+  "dashboard": {
+    "title": "Panel",
+    "overview": "Resumen",
+    "stats": {
+      "totalValue": "Valor Total del Portafolio",
+      "dailyPnL": "P&L Diario",
+      "winRate": "Tasa de Ganancia",
+      "activeBots": "Bots Activos"
+    },
+    "activeBots": "Bots de Trading Activos",
+    "recentTrades": "Operaciones Recientes",
+    "viewAll": "Ver Todo",
+    "createBot": "Crear Nuevo Bot"
+  },
+  "bots": {
+    "title": "Bots de Trading",
+    "managingFor": "Gestionando bots para {name}",
+    "totalBots": "Total de Bots",
+    "inactiveBots": "Bots Inactivos",
+    "createNew": "Crear Nuevo Bot",
+    "createNewBot": "Crear Nuevo Bot de Trading",
+    "botName": "Nombre del Bot",
+    "tradingPair": "Par de Trading",
+    "riskLevel": "Nivel de Riesgo",
+    "maxPositionSize": "Tamaño Máximo de Posición",
+    "selectTradingPair": "Seleccionar par de trading",
+    "lowRisk": "Riesgo Bajo (1%)",
+    "mediumRisk": "Riesgo Medio (2%)",
+    "highRisk": "Riesgo Alto (5%)",
+    "creating": "Creando...",
+    "active": "Activo",
+    "inactive": "Inactivo",
+    "start": "Iniciar",
+    "stop": "Detener",
+    "winRate": "Tasa de Ganancia",
+    "totalTrades": "Total de Operaciones",
+    "noBotsYet": "Aún no se han creado bots de trading",
+    "create": "Crear Bot",
+    "edit": "Editar",
+    "delete": "Eliminar"
+  },
+  "auth": {
+    "signIn": {
+      "title": "Bienvenido de vuelta",
+      "subtitle": "Inicia sesión en tu cuenta para continuar"
+    },
+    "signUp": {
+      "title": "Crear cuenta",
+      "subtitle": "Comienza tu viaje de trading"
+    }
+  }
+}

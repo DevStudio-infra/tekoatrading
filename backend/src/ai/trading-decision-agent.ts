@@ -2,7 +2,7 @@ import { BaseAgent } from "./base-agent";
 import { TechnicalAnalysisAgent } from "./technical-analysis-agent";
 import { RiskAssessmentAgent } from "./risk-assessment-agent";
 
-interface TradingDecision {
+export interface TradingDecision {
   action: "buy" | "sell" | "hold";
   quantity: number;
   confidence: number;

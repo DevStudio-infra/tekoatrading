@@ -2,6 +2,10 @@ import { prisma } from "../prisma";
 import { logger } from "../logger";
 import { CapitalMainService } from "../modules/capital";
 import { TechnicalAnalysisAgent, RiskAssessmentAgent, TradingDecisionAgent } from "../agents";
+import { EnhancedTradingDecisionAgent } from "../ai/enhanced-trading-decision-agent";
+import { credentialsEncryption } from "./credentials-encryption.service";
+import { supabaseStorageService } from "./supabase-storage.service";
+import { ChartService } from "../modules/chart";
 
 // Type definitions
 interface MarketData {
@@ -105,7 +109,7 @@ export class BotEvaluationService {
         bot.timeframe,
         chartResult.chartUrl!,
         portfolioContext,
-        { symbol: bot.tradingPairSymbol, price: 1.0 }, // Mock market price
+        await this.getRealMarketPrice(bot.tradingPairSymbol, botId), // Real market price
       );
 
       if (!analysisResult.success) {
@@ -178,24 +182,50 @@ export class BotEvaluationService {
     error?: string;
   }> {
     try {
-      logger.info(`📈 Generating chart for ${symbol} (${timeframe})`);
+      logger.info(`📊 Generating chart for ${symbol} (${timeframe})`);
 
-      // Mock chart generation - in real implementation, this would:
-      // 1. Fetch market data from broker API
-      // 2. Generate chart image using a charting library
-      // 3. Upload to cloud storage (Supabase)
-      // 4. Return the URL
+      const chartService = new ChartService();
+      const chartResult = await chartService.generateChart({
+        symbol,
+        timeframe,
+        width: 1200,
+        height: 800,
+        theme: "dark",
+        indicators: ["SMA", "EMA", "RSI"],
+        botId, // Pass botId to use user's broker credentials
+      });
 
-      const mockChartUrl = `https://mock-charts.example.com/${symbol}-${timeframe}-${Date.now()}.png`;
+      if (!chartResult.success || !chartResult.data) {
+        throw new Error("Chart generation failed");
+      }
 
-      // Simulate chart generation delay
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      // Upload chart to Supabase storage
+      const fileName = `${symbol}-${timeframe}-${Date.now()}.png`;
+      const chartUrl = await supabaseStorageService.uploadBase64Image(
+        chartResult.data,
+        fileName,
+        botId,
+      );
 
-      logger.info(`✅ Chart generated: ${mockChartUrl}`);
+      // Save chart reference in database
+      await prisma.chartImage.create({
+        data: {
+          filename: fileName,
+          symbol,
+          timeframe,
+          url: chartUrl,
+          metadata: JSON.stringify({
+            botId,
+            generatedAt: new Date(),
+          }),
+        },
+      });
+
+      logger.info(`✅ Chart generated and uploaded: ${chartUrl}`);
 
       return {
         success: true,
-        chartUrl: mockChartUrl,
+        chartUrl,
       };
     } catch (error) {
       logger.error("Chart generation failed:", error);
@@ -250,6 +280,99 @@ export class BotEvaluationService {
       logger.error("Failed to collect portfolio context:", error);
       return {};
     }
+  }
+
+  /**
+   * Get real market price for a symbol using bot's broker credentials
+   */
+  private async getRealMarketPrice(
+    symbol: string,
+    botId: string,
+  ): Promise<{ symbol: string; price: number }> {
+    try {
+      logger.info(`Fetching real market price for ${symbol} using bot ${botId} credentials`);
+
+      // Get bot configuration with broker credentials
+      const bot = await prisma.bot.findUnique({
+        where: { id: botId },
+        include: { brokerCredential: true },
+      });
+
+      if (!bot?.brokerCredential) {
+        const error = `❌ BROKER CREDENTIALS MISSING: Bot ${botId} has no broker credentials configured for price fetching.`;
+        logger.error(error);
+        throw new Error(error);
+      }
+
+      // Parse the encrypted credentials
+      let credentialsData;
+      try {
+        credentialsData = JSON.parse(bot.brokerCredential.credentials);
+      } catch (error) {
+        const errorMsg = `❌ CREDENTIAL PARSING FAILED: Bot ${botId} broker credentials are corrupted.`;
+        logger.error(errorMsg, error);
+        throw new Error(errorMsg);
+      }
+
+      if (!credentialsData.apiKey || !credentialsData.identifier || !credentialsData.password) {
+        const errorMsg = `❌ INCOMPLETE CREDENTIALS: Bot ${botId} broker credentials are missing required fields.`;
+        logger.error(errorMsg);
+        throw new Error(errorMsg);
+      }
+
+      const config = {
+        apiKey: credentialsData.apiKey,
+        identifier: credentialsData.identifier,
+        password: credentialsData.password,
+        isDemo: bot.brokerCredential.isDemo,
+      };
+
+      // Import Capital API service
+      const { getCapitalApiInstance } = await import("../modules/capital");
+      const capitalApi = getCapitalApiInstance(config);
+      await capitalApi.authenticate();
+
+      // Convert symbol to epic format
+      const epic = this.convertSymbolToEpic(symbol);
+
+      // Get current market price
+      const latestPrice = await capitalApi.getLatestPrice(epic);
+      const currentPrice = (latestPrice.bid + latestPrice.ask) / 2;
+
+      if (!currentPrice || currentPrice <= 0) {
+        const error = `❌ INVALID PRICE: Received invalid price ${currentPrice} for ${symbol}`;
+        logger.error(error);
+        throw new Error(error);
+      }
+
+      logger.info(`Real market price fetched for ${symbol}: ${currentPrice}`);
+      return { symbol, price: currentPrice };
+    } catch (error) {
+      logger.error(`❌ MARKET PRICE FETCH FAILED for ${symbol}:`, error);
+      throw error; // Re-throw instead of fallback
+    }
+  }
+
+  /**
+   * Convert symbol to Capital.com epic format
+   */
+  private convertSymbolToEpic(symbol: string): string {
+    const symbolMappings: { [key: string]: string } = {
+      BTCUSD: "BITCOIN",
+      ETHUSD: "ETHEREUM",
+      EURUSD: "EURUSD",
+      GBPUSD: "GBPUSD",
+      USDJPY: "USDJPY",
+      AUDUSD: "AUDUSD",
+      USDCAD: "USDCAD",
+      USDCHF: "USDCHF",
+      NZDUSD: "NZDUSD",
+      EURGBP: "EURGBP",
+      EURJPY: "EURJPY",
+      GBPJPY: "GBPJPY",
+    };
+
+    return symbolMappings[symbol.toUpperCase()] || symbol;
   }
 
   /**
@@ -371,7 +494,9 @@ export class BotEvaluationService {
         throw new Error("No broker credentials configured for bot");
       }
 
-      const credentials = bot.brokerCredential.credentials as any;
+      const credentials = credentialsEncryption.decryptCredentials(
+        bot.brokerCredential.credentials,
+      );
 
       // Initialize Capital.com API
       const capitalApi = new CapitalMainService({

@@ -1,0 +1,187 @@
+
+[2025-06-25T10:52:45.363Z] EVENT: session.created
+DATA: {
+  "data": {
+    "abandon_at": 1656606318265,
+    "client_id": "client_29wBS3h1zhE1BsEK2dg9oyypfYk",
+    "created_at": 1654014318265,
+    "expire_at": 1654619118265,
+    "id": "sess_29wBYxnMCQU2KIs6V3ZPOJCPUXx",
+    "last_active_at": 1654014318265,
+    "object": "session",
+    "status": "active",
+    "updated_at": 1654014318503,
+    "user_id": "user_29wBMCtzATuFJut8jO2VNTVekS4"
+  },
+  "event_attributes": {
+    "http_request": {
+      "client_ip": "0.0.0.0",
+      "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+    }
+  },
+  "object": "event",
+  "timestamp": 1654014318503,
+  "type": "session.created"
+}
+
+[2025-06-25T11:08:26.226Z] EVENT: session.ended
+DATA: {
+  "data": {
+    "abandon_at": 1753441629582,
+    "actor": null,
+    "client_id": "client_2yzuGh7YSkRkv4Lj9IWrryMm8zS",
+    "created_at": 1750849629582,
+    "expire_at": 1751454429582,
+    "id": "sess_2yzuGocm9HJHbDKnrtASTjRhNke",
+    "last_active_at": 1750849701871,
+    "object": "session",
+    "status": "ended",
+    "updated_at": 1750849705467,
+    "user_id": "user_2x7ZBVN7sYTSc1moT7b4QSDP8J9"
+  },
+  "event_attributes": {
+    "http_request": {
+      "client_ip": "213.22.200.124",
+      "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+    }
+  },
+  "instance_id": "ins_2tcNztDFOtr9HPIQlYF6b6eRHHf",
+  "object": "event",
+  "timestamp": 1750849705471,
+  "type": "session.ended"
+}
+
+[2025-06-25T11:08:29.348Z] EVENT: session.created
+DATA: {
+  "data": {
+    "abandon_at": 1753441708986,
+    "actor": null,
+    "client_id": "client_2yzuQiaq8JOMHyd9DwN0J2NVUP8",
+    "created_at": 1750849708986,
+    "expire_at": 1751454508986,
+    "id": "sess_2yzuQgcbRxbGMlYMeMH7xYyQZM9",
+    "last_active_at": 1750849708986,
+    "object": "session",
+    "status": "active",
+    "updated_at": 1750849709025,
+    "user_id": "user_2x7ZBVN7sYTSc1moT7b4QSDP8J9"
+  },
+  "event_attributes": {
+    "http_request": {
+      "client_ip": "213.22.200.124",
+      "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+    }
+  },
+  "instance_id": "ins_2tcNztDFOtr9HPIQlYF6b6eRHHf",
+  "object": "event",
+  "timestamp": 1750849709034,
+  "type": "session.created"
+}
+
+[2025-06-25T11:19:21.655Z] EVENT: session.ended
+DATA: {
+  "data": {
+    "abandon_at": 1753441708986,
+    "actor": null,
+    "client_id": "client_2yzuQiaq8JOMHyd9DwN0J2NVUP8",
+    "created_at": 1750849708986,
+    "expire_at": 1751454508986,
+    "id": "sess_2yzuQgcbRxbGMlYMeMH7xYyQZM9",
+    "last_active_at": 1750850355950,
+    "object": "session",
+    "status": "ended",
+    "updated_at": 1750850361355,
+    "user_id": "user_2x7ZBVN7sYTSc1moT7b4QSDP8J9"
+  },
+  "event_attributes": {
+    "http_request": {
+      "client_ip": "213.22.200.124",
+      "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+    }
+  },
+  "instance_id": "ins_2tcNztDFOtr9HPIQlYF6b6eRHHf",
+  "object": "event",
+  "timestamp": 1750850361360,
+  "type": "session.ended"
+}
+
+[2025-06-25T11:26:54.387Z] EVENT: session.created
+DATA: {
+  "data": {
+    "abandon_at": 1753442813996,
+    "actor": null,
+    "client_id": "client_2yzvtvoVyMY3D1bub2OfbTJzvbX",
+    "created_at": 1750850813996,
+    "expire_at": 1751455613996,
+    "id": "sess_2yzwfa2y3BP36X8z4SPTZ1CPaR1",
+    "last_active_at": 1750850813996,
+    "object": "session",
+    "status": "active",
+    "updated_at": 1750850814033,
+    "user_id": "user_2x7ZBVN7sYTSc1moT7b4QSDP8J9"
+  },
+  "event_attributes": {
+    "http_request": {
+      "client_ip": "213.22.200.124",
+      "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+    }
+  },
+  "instance_id": "ins_2tcNztDFOtr9HPIQlYF6b6eRHHf",
+  "object": "event",
+  "timestamp": 1750850814041,
+  "type": "session.created"
+}
+
+[2025-06-25T11:27:16.117Z] EVENT: session.ended
+DATA: {
+  "data": {
+    "abandon_at": 1753442813996,
+    "actor": null,
+    "client_id": "client_2yzvtvoVyMY3D1bub2OfbTJzvbX",
+    "created_at": 1750850813996,
+    "expire_at": 1751455613996,
+    "id": "sess_2yzwfa2y3BP36X8z4SPTZ1CPaR1",
+    "last_active_at": 1750850813996,
+    "object": "session",
+    "status": "ended",
+    "updated_at": 1750850835714,
+    "user_id": "user_2x7ZBVN7sYTSc1moT7b4QSDP8J9"
+  },
+  "event_attributes": {
+    "http_request": {
+      "client_ip": "213.22.200.124",
+      "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+    }
+  },
+  "instance_id": "ins_2tcNztDFOtr9HPIQlYF6b6eRHHf",
+  "object": "event",
+  "timestamp": 1750850835718,
+  "type": "session.ended"
+}
+
+[2025-06-25T11:27:21.718Z] EVENT: session.created
+DATA: {
+  "data": {
+    "abandon_at": 1753442841377,
+    "actor": null,
+    "client_id": "client_2yzwj3NwZHvoFs4Xysco6rOG6LV",
+    "created_at": 1750850841377,
+    "expire_at": 1751455641377,
+    "id": "sess_2yzwj6OfwYtEd7tXK3ZjTEHvtfw",
+    "last_active_at": 1750850841377,
+    "object": "session",
+    "status": "active",
+    "updated_at": 1750850841418,
+    "user_id": "user_2x7ZBVN7sYTSc1moT7b4QSDP8J9"
+  },
+  "event_attributes": {
+    "http_request": {
+      "client_ip": "213.22.200.124",
+      "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+    }
+  },
+  "instance_id": "ins_2tcNztDFOtr9HPIQlYF6b6eRHHf",
+  "object": "event",
+  "timestamp": 1750850841426,
+  "type": "session.created"
+}

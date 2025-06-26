@@ -65,4 +65,35 @@ export const usersRouter = router({
         },
       });
     }),
+
+  getCurrent: publicProcedure.query(async ({ ctx }) => {
+    // For now, return a mock user - this should be replaced with actual Clerk integration
+    return {
+      id: "user_2x7ZBVN7sYTSc1moT7b4QSDP8J9",
+      email: "test@example.com",
+      firstName: "Test",
+      lastName: "User",
+    };
+  }),
+
+  updateProfile: publicProcedure
+    .input(
+      z.object({
+        firstName: z.string().optional(),
+        lastName: z.string().optional(),
+        email: z.string().email().optional(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      // Mock implementation - replace with actual user update logic
+      return {
+        success: true,
+        user: {
+          id: "user_2x7ZBVN7sYTSc1moT7b4QSDP8J9",
+          email: input.email || "test@example.com",
+          firstName: input.firstName || "Test",
+          lastName: input.lastName || "User",
+        },
+      };
+    }),
 });

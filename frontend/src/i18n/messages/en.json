@@ -1,0 +1,122 @@
+{
+  "common": {
+    "home": "Home",
+    "dashboard": "Dashboard",
+    "bots": "Trading Bots",
+    "portfolio": "Portfolio",
+    "analytics": "Analytics",
+    "strategies": "Strategies",
+    "charts": "Charts",
+    "trades": "Trades",
+    "settings": "Settings",
+    "signIn": "Sign In",
+    "signUp": "Sign Up",
+    "signOut": "Sign Out",
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "cancel": "Cancel",
+    "save": "Save",
+    "edit": "Edit",
+    "delete": "Delete",
+    "create": "Create",
+    "back": "Back",
+    "next": "Next",
+    "previous": "Previous"
+  },
+  "nav": {
+    "welcome": "Welcome back, {name}!",
+    "welcomeGeneric": "Welcome back, Trader!"
+  },
+  "home": {
+    "title": "Professional Trading Platform",
+    "subtitle": "Automate your trading with AI-powered strategies and real-time market analysis",
+    "getStarted": "Get Started",
+    "learnMore": "Learn More",
+    "whyChoose": "Why Choose Tekoa Trading?",
+    "features": {
+      "title": "Powerful Features",
+      "aiTrading": {
+        "title": "AI Trading",
+        "description": "Advanced AI algorithms analyze market trends and execute trades automatically"
+      },
+      "riskManagement": {
+        "title": "Risk Management",
+        "description": "Built-in risk management tools to protect your investments"
+      },
+      "realTimeData": {
+        "title": "Real-time Data",
+        "description": "Access to real-time market data and advanced charting tools"
+      },
+      "aiPowered": {
+        "title": "AI-Powered Bots",
+        "description": "Advanced algorithms analyze market trends and execute trades with precision and speed."
+      },
+      "realTimeAnalytics": {
+        "title": "Real-time Analytics",
+        "description": "Monitor your portfolio performance with detailed analytics and live market data."
+      },
+      "secureReliable": {
+        "title": "Secure & Reliable",
+        "description": "Bank-grade security with 99.9% uptime ensures your funds and data are always protected."
+      }
+    },
+    "cta": {
+      "title": "Ready to start trading?",
+      "subtitle": "Join thousands of traders who trust our platform",
+      "start": "Start Trading",
+      "createAccount": "Create Account"
+    }
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "overview": "Overview",
+    "stats": {
+      "totalValue": "Total Portfolio Value",
+      "dailyPnL": "Daily P&L",
+      "winRate": "Win Rate",
+      "activeBots": "Active Bots"
+    },
+    "activeBots": "Active Trading Bots",
+    "recentTrades": "Recent Trades",
+    "viewAll": "View All",
+    "createBot": "Create New Bot"
+  },
+  "bots": {
+    "title": "Trading Bots",
+    "managingFor": "Managing bots for {name}",
+    "totalBots": "Total Bots",
+    "inactiveBots": "Inactive Bots",
+    "createNew": "Create New Bot",
+    "createNewBot": "Create New Trading Bot",
+    "botName": "Bot Name",
+    "tradingPair": "Trading Pair",
+    "riskLevel": "Risk Level",
+    "maxPositionSize": "Max Position Size",
+    "selectTradingPair": "Select trading pair",
+    "lowRisk": "Low Risk (1%)",
+    "mediumRisk": "Medium Risk (2%)",
+    "highRisk": "High Risk (5%)",
+    "creating": "Creating...",
+    "active": "Active",
+    "inactive": "Inactive",
+    "start": "Start",
+    "stop": "Stop",
+    "winRate": "Win Rate",
+    "totalTrades": "Total Trades",
+    "noBotsYet": "No trading bots created yet",
+    "create": "Create Bot",
+    "edit": "Edit",
+    "delete": "Delete"
+  },
+  "auth": {
+    "signIn": {
+      "title": "Welcome back",
+      "subtitle": "Sign in to your account to continue"
+    },
+    "signUp": {
+      "title": "Create account",
+      "subtitle": "Get started with your trading journey"
+    }
+  }
+}

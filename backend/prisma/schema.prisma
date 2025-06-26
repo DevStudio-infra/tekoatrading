@@ -1,261 +1,260 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
-    provider = "prisma-client-js"
+  provider = "prisma-client-js"
 }
 
 datasource db {
-    provider = "postgresql"
-    url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model User {
-    id        String   @id @default(cuid())
-    email     String   @unique
-    name      String?
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+  id                String             @id @default(cuid())
+  email             String             @unique
+  name              String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  clerkId           String?            @unique @map("clerk_id")
+  bots              Bot[]
+  brokerCredentials BrokerCredential[]
+  evaluations       Evaluation[]
+  marketData        MarketData[]
+  notifications     Notification[]
+  portfolios        Portfolio[]
+  strategies        Strategy[]
+  trades            Trade[]
 
-    // Relations
-    bots              Bot[]
-    strategies        Strategy[]
-    portfolios        Portfolio[]
-    trades            Trade[]
-    evaluations       Evaluation[]
-    brokerCredentials BrokerCredential[]
-    marketData        MarketData[]
-    notifications     Notification[]
+  @@map("users")
+}
 
-    @@map("users")
+model TradingPair {
+  id          Int      @id @default(autoincrement())
+  symbol      String   @unique
+  name        String
+  description String?
+  marketId    String?  @map("market_id")
+  type        String
+  category    String
+  brokerName  String   @map("broker_name")
+  isActive    Boolean  @default(true) @map("is_active")
+  metadata    String?
+  lastUpdated DateTime @default(now()) @map("last_updated")
+  createdAt   DateTime @default(now()) @map("created_at")
+  bots        Bot[]
+
+  @@map("trading_pairs")
 }
 
 model BrokerCredential {
-    id          String    @id @default(cuid())
-    userId      String
-    name        String
-    broker      String // "capital.com", "binance", etc.
-    isDemo      Boolean   @default(true)
-    isActive    Boolean   @default(true)
-    credentials Json // Encrypted credentials
-    lastUsed    DateTime?
-    createdAt   DateTime  @default(now())
-    updatedAt   DateTime  @updatedAt
+  id          String    @id @default(cuid())
+  userId      String
+  name        String
+  broker      String
+  isDemo      Boolean   @default(true)
+  isActive    Boolean   @default(true)
+  credentials String
+  lastUsed    DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  bots        Bot[]
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-    // Relations
-    user User  @relation(fields: [userId], references: [id], onDelete: Cascade)
-    bots Bot[]
-
-    @@unique([userId, broker, isDemo])
-    @@map("broker_credentials")
+  @@unique([userId, broker, isDemo])
+  @@map("broker_credentials")
 }
 
 model Bot {
-    id                 String    @id @default(cuid())
-    userId             String
-    name               String
-    description        String?
-    tradingPairSymbol  String
-    timeframe          String    @default("M1")
-    isActive           Boolean   @default(true)
-    isAiTradingActive  Boolean   @default(false)
-    maxPositionSize    Float     @default(100)
-    riskPercentage     Float     @default(2)
-    strategyId         String?
-    brokerCredentialId String?
-    lastEvaluationAt   DateTime?
-    totalTrades        Int       @default(0)
-    winningTrades      Int       @default(0)
-    totalProfit        Float     @default(0)
-    maxDrawdown        Float     @default(0)
-    createdAt          DateTime  @default(now())
-    updatedAt          DateTime  @updatedAt
+  id                 String            @id @default(cuid())
+  userId             String
+  name               String
+  description        String?
+  tradingPairSymbol  String
+  timeframe          String            @default("M1")
+  isActive           Boolean           @default(true)
+  isAiTradingActive  Boolean           @default(false)
+  maxPositionSize    Float             @default(100)
+  riskPercentage     Float             @default(2)
+  strategyId         String?
+  brokerCredentialId String?
+  tradingPairId      Int?              @map("trading_pair_id")
+  lastEvaluationAt   DateTime?
+  totalTrades        Int               @default(0)
+  winningTrades      Int               @default(0)
+  totalProfit        Float             @default(0)
+  maxDrawdown        Float             @default(0)
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  brokerCredential   BrokerCredential? @relation(fields: [brokerCredentialId], references: [id])
+  strategy           Strategy?         @relation(fields: [strategyId], references: [id])
+  tradingPair        TradingPair?      @relation(fields: [tradingPairId], references: [id])
+  user               User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  evaluations        Evaluation[]
+  positions          Position[]
+  trades             Trade[]
 
-    // Relations
-    user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-    strategy         Strategy?         @relation(fields: [strategyId], references: [id])
-    brokerCredential BrokerCredential? @relation(fields: [brokerCredentialId], references: [id])
-    trades           Trade[]
-    evaluations      Evaluation[]
-    positions        Position[]
-
-    @@map("bots")
+  @@map("bots")
 }
 
 model Strategy {
-    id          String   @id @default(cuid())
-    userId      String
-    name        String
-    description String?
-    indicators  Json // Array of technical indicators
-    parameters  Json // Strategy-specific parameters
-    isTemplate  Boolean  @default(false)
-    isActive    Boolean  @default(true)
-    createdAt   DateTime @default(now())
-    updatedAt   DateTime @updatedAt
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  description String?
+  indicators  String
+  parameters  String
+  isTemplate  Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  bots        Bot[]
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-    // Relations
-    user User  @relation(fields: [userId], references: [id], onDelete: Cascade)
-    bots Bot[]
-
-    @@map("strategies")
+  @@map("strategies")
 }
 
 model Trade {
-    id            String    @id @default(cuid())
-    userId        String
-    botId         String?
-    symbol        String
-    side          String // "BUY" or "SELL"
-    type          String // "MARKET", "LIMIT", "STOP"
-    size          Float
-    entryPrice    Float?
-    exitPrice     Float?
-    stopLoss      Float?
-    takeProfit    Float?
-    status        String // "PENDING", "FILLED", "CANCELLED", "CLOSED"
-    profitLoss    Float?
-    profitLossUsd Float?
-    commission    Float?
-    brokerOrderId String?
-    brokerTradeId String?
-    openedAt      DateTime?
-    closedAt      DateTime?
-    reason        String? // Reason for trade execution
-    confidence    Float? // AI confidence level
-    evaluationId  String?
-    createdAt     DateTime  @default(now())
-    updatedAt     DateTime  @updatedAt
+  id            String      @id @default(cuid())
+  userId        String
+  botId         String?
+  symbol        String
+  side          String
+  type          String
+  size          Float
+  entryPrice    Float?
+  exitPrice     Float?
+  stopLoss      Float?
+  takeProfit    Float?
+  status        String
+  profitLoss    Float?
+  profitLossUsd Float?
+  commission    Float?
+  brokerOrderId String?
+  brokerTradeId String?
+  openedAt      DateTime?
+  closedAt      DateTime?
+  reason        String?
+  confidence    Float?
+  evaluationId  String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  bot           Bot?        @relation(fields: [botId], references: [id])
+  evaluation    Evaluation? @relation(fields: [evaluationId], references: [id])
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-    // Relations
-    user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-    bot        Bot?        @relation(fields: [botId], references: [id])
-    evaluation Evaluation? @relation(fields: [evaluationId], references: [id])
-
-    @@map("trades")
+  @@map("trades")
 }
 
 model Position {
-    id               String   @id @default(cuid())
-    botId            String
-    symbol           String
-    side             String // "BUY" or "SELL"
-    size             Float
-    entryPrice       Float
-    currentPrice     Float?
-    stopLoss         Float?
-    takeProfit       Float?
-    unrealizedPnL    Float?
-    unrealizedPnLUsd Float?
-    brokerPositionId String?
-    openedAt         DateTime @default(now())
-    updatedAt        DateTime @updatedAt
+  id               String   @id @default(cuid())
+  botId            String
+  symbol           String
+  side             String
+  size             Float
+  entryPrice       Float
+  currentPrice     Float?
+  stopLoss         Float?
+  takeProfit       Float?
+  unrealizedPnL    Float?
+  unrealizedPnLUsd Float?
+  brokerPositionId String?
+  openedAt         DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  bot              Bot      @relation(fields: [botId], references: [id], onDelete: Cascade)
 
-    // Relations
-    bot Bot @relation(fields: [botId], references: [id], onDelete: Cascade)
-
-    @@unique([botId, symbol, brokerPositionId])
-    @@map("positions")
+  @@unique([botId, symbol, brokerPositionId])
+  @@map("positions")
 }
 
 model Evaluation {
-    id            String    @id @default(cuid())
-    userId        String
-    botId         String
-    symbol        String
-    timeframe     String
-    chartUrl      String?
-    decision      String // "BUY", "SELL", "HOLD", "EXECUTE_TRADE"
-    confidence    Float
-    reasoning     String?
-    chartAnalysis String?
-    riskScore     Float?
-    positionSize  Float?
-    stopLoss      Float?
-    takeProfit    Float?
-    marketPrice   Float?
-    aiResponse    Json?
-    portfolioData Json?
-    startDate     DateTime  @default(now())
-    endDate       DateTime?
-    duration      Int? // Duration in milliseconds
-    success       Boolean?
-    error         String?
-    createdAt     DateTime  @default(now())
+  id            String    @id @default(cuid())
+  userId        String
+  botId         String
+  symbol        String
+  timeframe     String
+  chartUrl      String?
+  decision      String
+  confidence    Float
+  reasoning     String?
+  chartAnalysis String?
+  riskScore     Float?
+  positionSize  Float?
+  stopLoss      Float?
+  takeProfit    Float?
+  marketPrice   Float?
+  aiResponse    String?
+  portfolioData String?
+  startDate     DateTime  @default(now())
+  endDate       DateTime?
+  duration      Int?
+  success       Boolean?
+  error         String?
+  createdAt     DateTime  @default(now())
+  bot           Bot       @relation(fields: [botId], references: [id], onDelete: Cascade)
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trades        Trade[]
 
-    // Relations
-    user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-    bot    Bot     @relation(fields: [botId], references: [id], onDelete: Cascade)
-    trades Trade[]
-
-    @@map("evaluations")
+  @@map("evaluations")
 }
 
 model Portfolio {
-    id              String   @id @default(cuid())
-    userId          String
-    name            String   @default("Default Portfolio")
-    balance         Float    @default(0)
-    currency        String   @default("USD")
-    totalValue      Float    @default(0)
-    totalPnL        Float    @default(0)
-    totalPnLPercent Float    @default(0)
-    dayPnL          Float    @default(0)
-    dayPnLPercent   Float    @default(0)
-    createdAt       DateTime @default(now())
-    updatedAt       DateTime @updatedAt
+  id              String   @id @default(cuid())
+  userId          String
+  name            String   @default("Default Portfolio")
+  balance         Float    @default(0)
+  currency        String   @default("USD")
+  totalValue      Float    @default(0)
+  totalPnL        Float    @default(0)
+  totalPnLPercent Float    @default(0)
+  dayPnL          Float    @default(0)
+  dayPnLPercent   Float    @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-    // Relations
-    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-    @@map("portfolios")
+  @@map("portfolios")
 }
 
 model MarketData {
-    id        String   @id @default(cuid())
-    userId    String?
-    symbol    String
-    timeframe String
-    timestamp DateTime
-    open      Float
-    high      Float
-    low       Float
-    close     Float
-    volume    Float?
-    createdAt DateTime @default(now())
+  id        String   @id @default(cuid())
+  userId    String?
+  symbol    String
+  timeframe String
+  timestamp DateTime
+  open      Float
+  high      Float
+  low       Float
+  close     Float
+  volume    Float?
+  createdAt DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id])
 
-    // Relations
-    user User? @relation(fields: [userId], references: [id])
-
-    @@unique([symbol, timeframe, timestamp])
-    @@map("market_data")
+  @@unique([symbol, timeframe, timestamp])
+  @@map("market_data")
 }
 
 model Notification {
-    id        String   @id @default(cuid())
-    userId    String
-    type      String // "TRADE", "ALERT", "SYSTEM", "ERROR"
-    title     String
-    message   String
-    data      Json?
-    isRead    Boolean  @default(false)
-    createdAt DateTime @default(now())
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  title     String
+  message   String
+  data      String?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-    // Relations
-    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-    @@map("notifications")
+  @@map("notifications")
 }
 
 model ChartImage {
-    id        String    @id @default(cuid())
-    filename  String    @unique
-    symbol    String
-    timeframe String
-    url       String
-    metadata  Json?
-    createdAt DateTime  @default(now())
-    expiresAt DateTime?
+  id        String    @id @default(cuid())
+  filename  String    @unique
+  symbol    String
+  timeframe String
+  url       String
+  metadata  String?
+  createdAt DateTime  @default(now())
+  expiresAt DateTime?
 
-    @@map("chart_images")
+  @@map("chart_images")
 }

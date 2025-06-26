@@ -1,22 +1,28 @@
 import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
-import * as trpcExpress from "@trpc/server/adapters/express";
-import { appRouter, createContext } from "./routers/root";
+import { createExpressMiddleware } from "@trpc/server/adapters/express";
+import { appRouter } from "./routers/root";
 import { logger } from "./logger";
 import clerkWebhookRouter from "./routes/clerk-webhook.routes";
+import { schedulerService } from "./services/scheduler.service";
 
 dotenv.config();
 
-const PORT = process.env.PORT ? Number(process.env.PORT) : 4000;
+const PORT = process.env.PORT || 3001;
 
 const app = express();
 
 app.use(cors());
+
+// Raw body parser for webhook verification
+app.use("/api/clerk-webhook", express.raw({ type: "application/json" }));
+
+// Regular JSON parser for other routes
 app.use(express.json());
 
-app.get("/health", (_req, res) => {
-  res.json({ status: "ok" });
+app.get("/health", (req, res) => {
+  res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
 // Add Clerk webhook route
@@ -24,12 +30,34 @@ app.use("/api/clerk-webhook", clerkWebhookRouter);
 
 app.use(
   "/trpc",
-  trpcExpress.createExpressMiddleware({
+  createExpressMiddleware({
     router: appRouter,
-    createContext,
+    createContext: () => ({}), // Basic context for now
   }),
 );
 
-app.listen(PORT, () => {
-  logger.info(`Backend server running on port ${PORT}`);
+// Start server
+app.listen(PORT, async () => {
+  logger.info(`🚀 Server running on port ${PORT}`);
+
+  // Start the bot scheduler
+  try {
+    await schedulerService.start();
+    logger.info("✅ Bot scheduler started successfully");
+  } catch (error) {
+    logger.error("❌ Failed to start bot scheduler:", error);
+  }
+});
+
+// Graceful shutdown
+process.on("SIGINT", async () => {
+  logger.info("🛑 Shutting down server...");
+  await schedulerService.stop();
+  process.exit(0);
+});
+
+process.on("SIGTERM", async () => {
+  logger.info("🛑 Shutting down server...");
+  await schedulerService.stop();
+  process.exit(0);
 });

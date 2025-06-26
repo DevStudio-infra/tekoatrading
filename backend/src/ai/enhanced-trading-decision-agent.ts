@@ -1,0 +1,323 @@
+import { BaseAgent } from "./base-agent";
+import { MasterProfessionalTradingAgent } from "./master-professional-trading-agent";
+
+interface EnhancedTradingDecision {
+  // Original format compatibility
+  action: "buy" | "sell" | "hold";
+  quantity: number;
+  confidence: number;
+  reasoning: string[];
+  technicalAnalysis: any;
+  riskAssessment: any;
+
+  // Professional enhancements
+  orderType: "MARKET" | "LIMIT" | "STOP";
+  limitPrice?: number;
+  stopPrice?: number;
+  stopLoss: number;
+  takeProfit: number;
+  riskRewardRatio: number;
+  portfolioImpact: any;
+
+  // Professional insights
+  marketConditions: string;
+  strategyAlignment: number;
+  timeframeSuitability: number;
+  warnings: string[];
+  recommendations: string[];
+  validated: boolean;
+}
+
+export class EnhancedTradingDecisionAgent extends BaseAgent {
+  private masterAgent: MasterProfessionalTradingAgent;
+
+  constructor() {
+    super("EnhancedTradingDecisionAgent");
+    this.masterAgent = new MasterProfessionalTradingAgent();
+  }
+
+  async analyze(data: {
+    symbol: string;
+    timeframe?: string;
+    strategy?: string;
+    marketData: any;
+    riskData: any;
+    accountBalance?: number;
+    openPositions?: any[];
+  }): Promise<EnhancedTradingDecision> {
+    try {
+      console.log(`🤖 Enhanced Trading Decision Agent analyzing ${data.symbol}`);
+
+      // Prepare context for professional analysis
+      const tradingContext = {
+        symbol: data.symbol,
+        timeframe: data.timeframe || "1h",
+        strategy: data.strategy || "trend_following",
+        marketData: {
+          currentPrice: data.marketData.price || data.marketData.currentPrice,
+          high24h: data.marketData.high24h || data.marketData.price * 1.02,
+          low24h: data.marketData.low24h || data.marketData.price * 0.98,
+          change24h: data.marketData.change24h || 0,
+          volume: data.marketData.volume || 1000000,
+          ...data.marketData,
+        },
+        accountBalance: data.accountBalance || data.riskData?.portfolioBalance || 10000,
+        openPositions: data.openPositions || [],
+        riskTolerance: "moderate" as const,
+      };
+
+      // Get professional trading decision
+      const professionalDecision =
+        await this.masterAgent.makeProfessionalTradingDecision(tradingContext);
+
+      // Convert to enhanced format
+      const enhancedDecision: EnhancedTradingDecision = {
+        // Original compatibility
+        action: professionalDecision.action.toLowerCase() as "buy" | "sell" | "hold",
+        quantity: professionalDecision.quantity,
+        confidence: professionalDecision.confidence,
+        reasoning: professionalDecision.reasoning,
+        technicalAnalysis: professionalDecision.technicalAnalysis,
+        riskAssessment: professionalDecision.riskAssessment,
+
+        // Professional enhancements
+        orderType: professionalDecision.orderType,
+        limitPrice: professionalDecision.limitPrice,
+        stopPrice: professionalDecision.stopPrice,
+        stopLoss: professionalDecision.stopLoss,
+        takeProfit: professionalDecision.takeProfit,
+        riskRewardRatio: professionalDecision.riskRewardRatio,
+        portfolioImpact: professionalDecision.portfolioImpact,
+
+        // Professional insights
+        marketConditions: professionalDecision.marketConditions,
+        strategyAlignment: professionalDecision.strategyAlignment,
+        timeframeSuitability: professionalDecision.timeframeSuitability,
+        warnings: professionalDecision.warnings,
+        recommendations: professionalDecision.recommendations,
+        validated: professionalDecision.validated,
+      };
+
+      // Log professional insights
+      this.logProfessionalInsights(enhancedDecision);
+
+      return enhancedDecision;
+    } catch (error) {
+      console.error("❌ Error in enhanced trading decision:", error);
+      return this.getFallbackDecision(data);
+    }
+  }
+
+  // New method for position management
+  async managePosition(positionData: {
+    id: string;
+    symbol: string;
+    direction: "BUY" | "SELL";
+    entryPrice: number;
+    currentPrice: number;
+    quantity: number;
+    stopLoss: number;
+    takeProfit: number;
+    openedAt: Date;
+    strategy?: string;
+    timeframe?: string;
+  }): Promise<any> {
+    try {
+      const position = {
+        ...positionData,
+        strategy: positionData.strategy || "trend_following",
+        timeframe: positionData.timeframe || "1h",
+      };
+
+      return await this.masterAgent.manageExistingPosition(positionData.id, position);
+    } catch (error) {
+      console.error("❌ Error in position management:", error);
+      return {
+        action: "HOLD",
+        reasoning: ["Error in position management"],
+        confidence: 0.3,
+        priority: "LOW",
+      };
+    }
+  }
+
+  // Enhanced method for getting trading recommendation with full context
+  async getFullTradingRecommendation(params: {
+    symbol: string;
+    timeframe: string;
+    strategy: string;
+    marketData: any;
+    accountData: {
+      balance: number;
+      openPositions: any[];
+      riskTolerance: "conservative" | "moderate" | "aggressive";
+    };
+  }): Promise<{
+    decision: EnhancedTradingDecision;
+    executionPlan: {
+      immediate: string[];
+      monitoring: string[];
+      riskManagement: string[];
+    };
+    marketAnalysis: {
+      technicalSummary: string;
+      riskSummary: string;
+      portfolioSummary: string;
+    };
+  }> {
+    try {
+      // Get enhanced decision
+      const decision = await this.analyze({
+        symbol: params.symbol,
+        timeframe: params.timeframe,
+        strategy: params.strategy,
+        marketData: params.marketData,
+        riskData: { portfolioBalance: params.accountData.balance },
+        accountBalance: params.accountData.balance,
+        openPositions: params.accountData.openPositions,
+      });
+
+      // Create execution plan
+      const executionPlan = this.createExecutionPlan(decision);
+
+      // Create market analysis summary
+      const marketAnalysis = this.createMarketAnalysisSummary(decision);
+
+      return {
+        decision,
+        executionPlan,
+        marketAnalysis,
+      };
+    } catch (error) {
+      console.error("❌ Error getting full trading recommendation:", error);
+      throw error;
+    }
+  }
+
+  private logProfessionalInsights(decision: EnhancedTradingDecision): void {
+    console.log(`📊 Professional Trading Insights:`);
+    console.log(`   Market Conditions: ${decision.marketConditions}`);
+    console.log(`   Strategy Alignment: ${decision.strategyAlignment}%`);
+    console.log(`   Timeframe Suitability: ${decision.timeframeSuitability}%`);
+    console.log(`   Order Type: ${decision.orderType}`);
+    console.log(`   Risk-Reward Ratio: ${decision.riskRewardRatio}:1`);
+
+    if (decision.warnings.length > 0) {
+      console.log(`⚠️  Warnings: ${decision.warnings.join(", ")}`);
+    }
+
+    if (decision.recommendations.length > 0) {
+      console.log(`💡 Recommendations: ${decision.recommendations.join(", ")}`);
+    }
+  }
+
+  private createExecutionPlan(decision: EnhancedTradingDecision): {
+    immediate: string[];
+    monitoring: string[];
+    riskManagement: string[];
+  } {
+    const immediate: string[] = [];
+    const monitoring: string[] = [];
+    const riskManagement: string[] = [];
+
+    if (decision.action !== "hold") {
+      // Immediate actions
+      immediate.push(
+        `Execute ${decision.orderType} ${decision.action} order for ${decision.quantity} units`,
+      );
+
+      if (decision.limitPrice) {
+        immediate.push(`Set limit price at ${decision.limitPrice}`);
+      }
+
+      if (decision.stopPrice) {
+        immediate.push(`Set stop price at ${decision.stopPrice}`);
+      }
+
+      immediate.push(`Set stop loss at ${decision.stopLoss}`);
+      immediate.push(`Set take profit at ${decision.takeProfit}`);
+
+      // Monitoring actions
+      monitoring.push("Monitor position for breakeven move opportunity");
+      monitoring.push("Watch for trailing stop adjustment signals");
+      monitoring.push("Track market conditions for early exit signals");
+
+      // Risk management
+      riskManagement.push(`Maximum risk: ${decision.riskAssessment?.maxPositionSize || 0} units`);
+      riskManagement.push(`Risk-reward ratio: ${decision.riskRewardRatio}:1`);
+
+      if (decision.warnings.length > 0) {
+        riskManagement.push(`Address warnings: ${decision.warnings.join(", ")}`);
+      }
+    } else {
+      immediate.push("Hold position - conditions not favorable for trading");
+      monitoring.push("Continue monitoring for improved trading conditions");
+    }
+
+    return { immediate, monitoring, riskManagement };
+  }
+
+  private createMarketAnalysisSummary(decision: EnhancedTradingDecision): {
+    technicalSummary: string;
+    riskSummary: string;
+    portfolioSummary: string;
+  } {
+    const technical = decision.technicalAnalysis;
+    const risk = decision.riskAssessment;
+    const portfolio = decision.portfolioImpact;
+
+    const technicalSummary = `
+      Trend: ${technical?.trend || "neutral"} |
+      Strength: ${technical?.strength || 5}/10 |
+      Confidence: ${Math.round((technical?.confidence || 0.5) * 100)}% |
+      Market: ${decision.marketConditions}
+    `.trim();
+
+    const riskSummary = `
+      Risk Level: ${risk?.riskLevel || "medium"} |
+      Max Position: ${risk?.maxPositionSize || 0} |
+      Portfolio Heat: ${portfolio?.portfolioHeatLevel || 50}% |
+      Validated: ${decision.validated ? "✅" : "❌"}
+    `.trim();
+
+    const portfolioSummary = `
+      Can Trade: ${portfolio?.canTrade ? "✅" : "❌"} |
+      Risk Level: ${portfolio?.riskLevel || "unknown"} |
+      Recommendations: ${portfolio?.recommendations?.length || 0} |
+      Warnings: ${portfolio?.warnings?.length || 0}
+    `.trim();
+
+    return {
+      technicalSummary,
+      riskSummary,
+      portfolioSummary,
+    };
+  }
+
+  private getFallbackDecision(data: any): EnhancedTradingDecision {
+    return {
+      // Original compatibility
+      action: "hold",
+      quantity: 0,
+      confidence: 0.3,
+      reasoning: ["Error in analysis - defaulting to hold"],
+      technicalAnalysis: null,
+      riskAssessment: null,
+
+      // Professional enhancements
+      orderType: "MARKET",
+      stopLoss: 0,
+      takeProfit: 0,
+      riskRewardRatio: 0,
+      portfolioImpact: null,
+
+      // Professional insights
+      marketConditions: "Unknown",
+      strategyAlignment: 0,
+      timeframeSuitability: 0,
+      warnings: ["System error occurred"],
+      recommendations: ["Check system status"],
+      validated: false,
+    };
+  }
+}

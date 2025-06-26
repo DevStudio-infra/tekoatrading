@@ -1,0 +1,110 @@
+{
+  "common": {
+    "home": "Início",
+    "dashboard": "Painel",
+    "bots": "Bots de Trading",
+    "portfolio": "Portfólio",
+    "analytics": "Analíticas",
+    "strategies": "Estratégias",
+    "charts": "Gráficos",
+    "trades": "Negociações",
+    "settings": "Configurações",
+    "signIn": "Entrar",
+    "signUp": "Registrar",
+    "signOut": "Sair",
+    "loading": "Carregando...",
+    "error": "Erro",
+    "success": "Sucesso",
+    "cancel": "Cancelar",
+    "save": "Salvar",
+    "edit": "Editar",
+    "delete": "Excluir",
+    "create": "Criar",
+    "back": "Voltar",
+    "next": "Próximo",
+    "previous": "Anterior"
+  },
+  "nav": {
+    "welcome": "Bem-vindo de volta, {name}!",
+    "welcomeGeneric": "Bem-vindo de volta, Trader!"
+  },
+  "home": {
+    "title": "Plataforma de Trading Profissional",
+    "subtitle": "Automatize seu trading com estratégias movidas por IA e análise de mercado em tempo real",
+    "getStarted": "Começar",
+    "learnMore": "Saber Mais",
+    "whyChoose": "Por que escolher Tekoa Trading?",
+    "features": {
+      "title": "Recursos Poderosos",
+      "aiTrading": {
+        "title": "Trading com IA",
+        "description": "Algoritmos avançados de IA analisam tendências do mercado e executam negociações automaticamente"
+      },
+      "riskManagement": {
+        "title": "Gestão de Riscos",
+        "description": "Ferramentas integradas de gestão de riscos para proteger seus investimentos"
+      },
+      "realTimeData": {
+        "title": "Dados em Tempo Real",
+        "description": "Acesso a dados de mercado em tempo real e ferramentas de gráficos avançadas"
+      }
+    },
+    "cta": {
+      "title": "Pronto para começar a negociar?",
+      "subtitle": "Junte-se a milhares de traders que confiam na nossa plataforma",
+      "start": "Começar Trading",
+      "createAccount": "Criar Conta"
+    }
+  },
+  "dashboard": {
+    "title": "Painel",
+    "overview": "Visão Geral",
+    "stats": {
+      "totalValue": "Valor Total do Portfólio",
+      "dailyPnL": "P&L Diário",
+      "winRate": "Taxa de Vitórias",
+      "activeBots": "Bots Ativos"
+    },
+    "activeBots": "Bots de Trading Ativos",
+    "recentTrades": "Negociações Recentes",
+    "viewAll": "Ver Tudo",
+    "createBot": "Criar Novo Bot"
+  },
+  "bots": {
+    "title": "Bots de Trading",
+    "managingFor": "Gerenciando bots para {name}",
+    "totalBots": "Total de Bots",
+    "inactiveBots": "Bots Inativos",
+    "createNew": "Criar Novo Bot",
+    "createNewBot": "Criar Novo Bot de Trading",
+    "botName": "Nome do Bot",
+    "tradingPair": "Par de Trading",
+    "riskLevel": "Nível de Risco",
+    "maxPositionSize": "Tamanho Máximo da Posição",
+    "selectTradingPair": "Selecionar par de trading",
+    "lowRisk": "Risco Baixo (1%)",
+    "mediumRisk": "Risco Médio (2%)",
+    "highRisk": "Risco Alto (5%)",
+    "creating": "Criando...",
+    "active": "Ativo",
+    "inactive": "Inativo",
+    "start": "Iniciar",
+    "stop": "Parar",
+    "winRate": "Taxa de Vitória",
+    "totalTrades": "Total de Negociações",
+    "noBotsYet": "Ainda não foram criados bots de trading",
+    "create": "Criar Bot",
+    "edit": "Editar",
+    "delete": "Excluir"
+  },
+  "auth": {
+    "signIn": {
+      "title": "Bem-vindo de volta",
+      "subtitle": "Entre em sua conta para continuar"
+    },
+    "signUp": {
+      "title": "Criar conta",
+      "subtitle": "Inicie sua jornada de trading"
+    }
+  }
+}

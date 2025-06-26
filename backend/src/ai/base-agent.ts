@@ -8,7 +8,7 @@ export abstract class BaseAgent {
   constructor(name: string) {
     this.name = name;
     this.llm = new ChatGoogleGenerativeAI({
-      modelName: "gemini-pro",
+      modelName: "gemini-2.0-flash",
       temperature: 0.1,
       apiKey: process.env.GOOGLE_API_KEY,
     });
