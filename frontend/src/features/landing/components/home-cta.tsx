@@ -1,12 +1,15 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "../../shared/components/ui/button";
 import { useAuth } from "../../auth/components/auth-wrapper";
 
 export function HomeCTA() {
   const t = useTranslations("home");
+  const params = useParams();
+  const locale = params.locale as string;
   const { isSignedIn } = useAuth();
 
   if (isSignedIn) {
@@ -19,7 +22,7 @@ export function HomeCTA() {
         <h2 className="text-3xl font-bold text-foreground mb-4">{t("cta.title")}</h2>
         <p className="text-xl text-muted-foreground mb-8">{t("cta.subtitle")}</p>
         <Button asChild size="lg">
-          <Link href="/sign-up">{t("cta.createAccount")}</Link>
+          <Link href={`/${locale}/sign-up`}>{t("cta.createAccount")}</Link>
         </Button>
       </div>
     </div>

@@ -2,12 +2,15 @@
 
 import { SignUp } from "@clerk/nextjs";
 import { useTranslations } from "next-intl";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 import { Navigation } from "../../shared/components/navigation";
 import { Button } from "../../shared/components/ui/button";
 
 export function SignUpForm() {
   const t = useTranslations("auth.signUp");
+  const params = useParams();
+  const locale = params.locale as string;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background to-secondary/20">
@@ -26,7 +29,7 @@ export function SignUpForm() {
 
           <div className="text-center">
             <Button asChild variant="ghost" size="sm">
-              <Link href="/">← Back to Home</Link>
+              <Link href={`/${locale}`}>← Back to Home</Link>
             </Button>
           </div>
         </div>

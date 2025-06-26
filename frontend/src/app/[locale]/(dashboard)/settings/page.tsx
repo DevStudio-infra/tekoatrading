@@ -1,6 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 import { Card } from "@/features/shared/components/ui/card";
 import { Button } from "@/features/shared/components/ui/button";
@@ -8,6 +9,8 @@ import { Shield, User, Settings, ChevronRight } from "lucide-react";
 
 export default function SettingsPage() {
   const t = useTranslations("settings");
+  const params = useParams();
+  const locale = params.locale as string;
 
   const settingsOptions = [
     {
@@ -28,7 +31,7 @@ export default function SettingsPage() {
       title: "Broker Credentials",
       description: "Manage your broker API connections and credentials for automated trading.",
       icon: Shield,
-      href: "/settings/broker-credentials",
+      href: `/${locale}/settings/broker-credentials`,
       available: true,
     },
   ];
@@ -66,7 +69,7 @@ export default function SettingsPage() {
           }
 
           return (
-            <Link key={option.title} href={option.href}>
+            <Link key={option.title} href={option.href as any}>
               <Card className="p-6 hover:bg-accent transition-colors cursor-pointer">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-4">
@@ -90,7 +93,7 @@ export default function SettingsPage() {
       <div className="mt-8">
         <h2 className="text-xl font-semibold mb-4">Quick Actions</h2>
         <div className="flex flex-wrap gap-4">
-          <Link href="/settings/broker-credentials">
+          <Link href={`/${locale}/settings/broker-credentials`}>
             <Button variant="outline" className="flex items-center space-x-2">
               <Shield className="h-4 w-4" />
               <span>Add Broker Credentials</span>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { useParams } from "next/navigation";
 import {
   Card,
   CardContent,
@@ -14,6 +15,8 @@ import Link from "next/link";
 
 export function ActiveBots() {
   const t = useTranslations("dashboard");
+  const params = useParams();
+  const locale = params.locale as string;
 
   // Mock data - replace with real data
   const bots = [
@@ -36,7 +39,7 @@ export function ActiveBots() {
             <div className="text-center py-8">
               <p className="text-muted-foreground mb-4">{t("noActiveBots")}</p>
               <Button asChild>
-                <Link href="/bots">{t("createFirstBot")}</Link>
+                <Link href={`/${locale}/bots`}>{t("createFirstBot")}</Link>
               </Button>
             </div>
           ) : (
