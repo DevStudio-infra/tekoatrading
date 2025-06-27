@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Plus, Edit, Trash2, Copy } from "lucide-react";
+import { Plus, Edit, Trash2, Copy, BookOpen } from "lucide-react";
 import { Button } from "../shared/components/ui/button";
 import {
   Card,
@@ -12,6 +12,7 @@ import {
 } from "../shared/components/ui/card";
 import { CreateStrategyDialog } from "./create-strategy-dialog";
 import { EditStrategyDialog } from "./edit-strategy-dialog";
+import { StrategyTemplateDialog } from "./strategy-template-dialog";
 import { toast } from "sonner";
 import { Badge } from "../shared/components/ui/badge";
 import { trpc } from "../../lib/trpc";
@@ -31,6 +32,7 @@ interface Strategy {
 export function StrategyList() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [selectedStrategy, setSelectedStrategy] = useState<Strategy | null>(null);
 
   const { data: strategies, isLoading, refetch } = trpc.strategies.getAll.useQuery();
@@ -62,6 +64,11 @@ export function StrategyList() {
     setEditDialogOpen(true);
   };
 
+  const handleTemplateCreated = () => {
+    refetch();
+    setTemplateDialogOpen(false);
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-8">
@@ -77,22 +84,34 @@ export function StrategyList() {
           <h2 className="text-3xl font-bold tracking-tight">Trading Strategies</h2>
           <p className="text-muted-foreground">Manage your trading strategies and indicators</p>
         </div>
-        <Button onClick={() => setCreateDialogOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Create Strategy
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setTemplateDialogOpen(true)}>
+            <BookOpen className="mr-2 h-4 w-4" />
+            Use Template
+          </Button>
+          <Button onClick={() => setCreateDialogOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Create Strategy
+          </Button>
+        </div>
       </div>
 
       {strategies && strategies.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center justify-center py-8">
             <p className="text-center text-muted-foreground mb-4">
-              No strategies created yet. Create your first strategy to get started.
+              No strategies created yet. Create your first strategy or start with a template.
             </p>
-            <Button onClick={() => setCreateDialogOpen(true)}>
-              <Plus className="mr-2 h-4 w-4" />
-              Create Strategy
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setTemplateDialogOpen(true)}>
+                <BookOpen className="mr-2 h-4 w-4" />
+                Browse Templates
+              </Button>
+              <Button onClick={() => setCreateDialogOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                Create Strategy
+              </Button>
+            </div>
           </CardContent>
         </Card>
       ) : (
@@ -161,6 +180,12 @@ export function StrategyList() {
           }}
         />
       )}
+
+      <StrategyTemplateDialog
+        open={templateDialogOpen}
+        onOpenChange={setTemplateDialogOpen}
+        onStrategyCreated={handleTemplateCreated}
+      />
     </div>
   );
 }

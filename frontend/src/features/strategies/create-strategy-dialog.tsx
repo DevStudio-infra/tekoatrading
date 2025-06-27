@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -31,13 +31,29 @@ interface CreateStrategyDialogProps {
   onSuccess: () => void;
 }
 
-const AVAILABLE_INDICATORS = [
+interface Indicator {
+  name: string;
+  displayName: string;
+  params: string[];
+  defaults: Record<string, any>;
+  panel: string;
+}
+
+const FALLBACK_INDICATORS = [
   { value: "sma", label: "Simple Moving Average (SMA)" },
   { value: "ema", label: "Exponential Moving Average (EMA)" },
+  { value: "wma", label: "Weighted Moving Average (WMA)" },
   { value: "rsi", label: "Relative Strength Index (RSI)" },
   { value: "macd", label: "MACD" },
   { value: "bollinger", label: "Bollinger Bands" },
   { value: "stochastic", label: "Stochastic Oscillator" },
+  { value: "atr", label: "Average True Range (ATR)" },
+  { value: "vwap", label: "Volume Weighted Average Price (VWAP)" },
+  { value: "volume", label: "Volume" },
+  { value: "cci", label: "Commodity Channel Index (CCI)" },
+  { value: "williams_r", label: "Williams %R" },
+  { value: "adx", label: "Average Directional Index (ADX)" },
+  { value: "psar", label: "Parabolic SAR" },
 ];
 
 export function CreateStrategyDialog({ open, onOpenChange, onSuccess }: CreateStrategyDialogProps) {
@@ -45,6 +61,8 @@ export function CreateStrategyDialog({ open, onOpenChange, onSuccess }: CreateSt
   const [description, setDescription] = useState("");
   const [isActive, setIsActive] = useState(true);
   const [selectedIndicators, setSelectedIndicators] = useState<string[]>([]);
+  const [availableIndicators, setAvailableIndicators] = useState(FALLBACK_INDICATORS);
+  const [indicatorParams, setIndicatorParams] = useState<Record<string, Record<string, any>>>({});
   const [parameters, setParameters] = useState({
     stopLoss: "2",
     takeProfit: "4",
@@ -53,6 +71,23 @@ export function CreateStrategyDialog({ open, onOpenChange, onSuccess }: CreateSt
   });
 
   const createStrategyMutation = trpc.strategies.create.useMutation();
+
+  // Fetch supported indicators from the backend
+  const { data: supportedIndicators, isLoading: indicatorsLoading } =
+    trpc.strategyTemplates.getSupportedIndicators.useQuery(undefined, {
+      enabled: open, // Only fetch when dialog is open
+    });
+
+  useEffect(() => {
+    if (supportedIndicators && supportedIndicators.length > 0) {
+      // Map backend indicator format to frontend format
+      const mappedIndicators = supportedIndicators.map((indicator: any) => ({
+        value: indicator.name,
+        label: `${indicator.displayName} (${indicator.name.toUpperCase()})`,
+      }));
+      setAvailableIndicators(mappedIndicators);
+    }
+  }, [supportedIndicators]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,7 +105,10 @@ export function CreateStrategyDialog({ open, onOpenChange, onSuccess }: CreateSt
     try {
       const indicators = selectedIndicators.reduce(
         (acc, ind) => {
-          acc[ind] = { enabled: true };
+          acc[ind] = {
+            enabled: true,
+            params: indicatorParams[ind] || {},
+          };
           return acc;
         },
         {} as Record<string, any>,
@@ -90,6 +128,7 @@ export function CreateStrategyDialog({ open, onOpenChange, onSuccess }: CreateSt
       setName("");
       setDescription("");
       setSelectedIndicators([]);
+      setIndicatorParams({});
       setParameters({
         stopLoss: "2",
         takeProfit: "4",
@@ -104,9 +143,38 @@ export function CreateStrategyDialog({ open, onOpenChange, onSuccess }: CreateSt
   };
 
   const toggleIndicator = (indicator: string) => {
-    setSelectedIndicators((prev) =>
-      prev.includes(indicator) ? prev.filter((i) => i !== indicator) : [...prev, indicator],
-    );
+    setSelectedIndicators((prev) => {
+      const isSelected = prev.includes(indicator);
+      if (isSelected) {
+        // Remove indicator and its parameters
+        setIndicatorParams((prevParams) => {
+          const newParams = { ...prevParams };
+          delete newParams[indicator];
+          return newParams;
+        });
+        return prev.filter((i) => i !== indicator);
+      } else {
+        // Add indicator and initialize with default parameters
+        const indicatorInfo = supportedIndicators?.find((ind: any) => ind.name === indicator);
+        if (indicatorInfo) {
+          setIndicatorParams((prevParams) => ({
+            ...prevParams,
+            [indicator]: { ...indicatorInfo.defaults },
+          }));
+        }
+        return [...prev, indicator];
+      }
+    });
+  };
+
+  const updateIndicatorParam = (indicator: string, param: string, value: any) => {
+    setIndicatorParams((prev) => ({
+      ...prev,
+      [indicator]: {
+        ...prev[indicator],
+        [param]: value,
+      },
+    }));
   };
 
   return (
@@ -155,32 +223,100 @@ export function CreateStrategyDialog({ open, onOpenChange, onSuccess }: CreateSt
               </div>
             </TabsContent>
 
-            <TabsContent value="indicators" className="space-y-4 mt-4">
-              <div className="space-y-2">
-                <Label>Select Indicators</Label>
-                <div className="grid grid-cols-2 gap-4">
-                  {AVAILABLE_INDICATORS.map((indicator) => (
-                    <div
-                      key={indicator.value}
-                      className={`p-3 border rounded-lg cursor-pointer transition-colors ${
-                        selectedIndicators.includes(indicator.value)
-                          ? "border-primary bg-primary/5"
-                          : "border-input hover:border-primary/50"
-                      }`}
-                      onClick={() => toggleIndicator(indicator.value)}
-                    >
-                      <div className="flex items-center space-x-2">
-                        <input
-                          type="checkbox"
-                          checked={selectedIndicators.includes(indicator.value)}
-                          onChange={() => {}}
-                          className="h-4 w-4"
-                        />
-                        <span className="text-sm font-medium">{indicator.label}</span>
+            <TabsContent value="indicators" className="space-y-4 mt-4 max-h-96 overflow-y-auto">
+              <div className="space-y-4">
+                <div>
+                  <Label>Select Indicators</Label>
+                  <div className="grid grid-cols-2 gap-4 mt-2">
+                    {availableIndicators.map((indicator) => (
+                      <div
+                        key={indicator.value}
+                        className={`p-3 border rounded-lg cursor-pointer transition-colors ${
+                          selectedIndicators.includes(indicator.value)
+                            ? "border-primary bg-primary/5"
+                            : "border-input hover:border-primary/50"
+                        }`}
+                        onClick={() => toggleIndicator(indicator.value)}
+                      >
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            checked={selectedIndicators.includes(indicator.value)}
+                            onChange={() => {}}
+                            className="h-4 w-4"
+                          />
+                          <span className="text-sm font-medium">{indicator.label}</span>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
+
+                {/* Indicator Parameters Configuration */}
+                {selectedIndicators.length > 0 && (
+                  <div className="space-y-4">
+                    <Label className="text-base font-semibold">
+                      Configure Indicator Parameters
+                    </Label>
+                    {selectedIndicators.map((indicatorName) => {
+                      const indicatorInfo = supportedIndicators?.find(
+                        (ind: any) => ind.name === indicatorName,
+                      );
+                      if (!indicatorInfo) return null;
+
+                      return (
+                        <div key={indicatorName} className="p-4 border rounded-lg bg-muted/30">
+                          <h4 className="font-medium mb-3">{indicatorInfo.displayName}</h4>
+                          <div className="grid grid-cols-2 gap-3">
+                            {indicatorInfo.params.map((param: string) => {
+                              const currentValue =
+                                indicatorParams[indicatorName]?.[param] ??
+                                indicatorInfo.defaults[param];
+
+                              return (
+                                <div key={param} className="space-y-1">
+                                  <Label
+                                    htmlFor={`${indicatorName}-${param}`}
+                                    className="text-xs capitalize"
+                                  >
+                                    {param.replace(/_/g, " ")}
+                                  </Label>
+                                  {param === "color" ? (
+                                    <Input
+                                      id={`${indicatorName}-${param}`}
+                                      type="color"
+                                      value={currentValue}
+                                      onChange={(e) =>
+                                        updateIndicatorParam(indicatorName, param, e.target.value)
+                                      }
+                                      className="h-8"
+                                    />
+                                  ) : (
+                                    <Input
+                                      id={`${indicatorName}-${param}`}
+                                      type="number"
+                                      value={currentValue}
+                                      onChange={(e) =>
+                                        updateIndicatorParam(
+                                          indicatorName,
+                                          param,
+                                          parseFloat(e.target.value) || e.target.value,
+                                        )
+                                      }
+                                      step={param.includes("af") ? "0.01" : "1"}
+                                      min={param.includes("period") ? "1" : undefined}
+                                      className="h-8"
+                                    />
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </TabsContent>
 

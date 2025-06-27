@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { router, publicProcedure } from "../trpc";
+import { router, protectedProcedure } from "../trpc";
 
 export const strategiesRouter = router({
-  getAll: publicProcedure.query(async ({ ctx }) => {
+  getAll: protectedProcedure.query(async ({ ctx }) => {
     const userId = ctx.user?.id;
     if (!userId) throw new Error("User not authenticated");
 
@@ -25,7 +25,7 @@ export const strategiesRouter = router({
     }));
   }),
 
-  list: publicProcedure.input(z.object({ userId: z.string() })).query(async ({ ctx, input }) => {
+  list: protectedProcedure.input(z.object({ userId: z.string() })).query(async ({ ctx, input }) => {
     const strategies = await ctx.prisma.strategy.findMany({
       where: { userId: input.userId },
       orderBy: { createdAt: "desc" },
@@ -45,10 +45,9 @@ export const strategiesRouter = router({
     }));
   }),
 
-  create: publicProcedure
+  create: protectedProcedure
     .input(
       z.object({
-        userId: z.string().optional(),
         name: z.string(),
         description: z.string().optional(),
         indicators: z.record(z.any()),
@@ -57,8 +56,7 @@ export const strategiesRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const userId = input.userId || ctx.user?.id;
-      if (!userId) throw new Error("User not authenticated");
+      const userId = ctx.user.id; // User is guaranteed to exist in protectedProcedure
 
       return await ctx.prisma.strategy.create({
         data: {
@@ -72,7 +70,7 @@ export const strategiesRouter = router({
       });
     }),
 
-  update: publicProcedure
+  update: protectedProcedure
     .input(
       z.object({
         id: z.string(),
@@ -95,13 +93,15 @@ export const strategiesRouter = router({
       });
     }),
 
-  delete: publicProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
-    return await ctx.prisma.strategy.delete({
-      where: { id: input.id },
-    });
-  }),
+  delete: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      return await ctx.prisma.strategy.delete({
+        where: { id: input.id },
+      });
+    }),
 
-  duplicate: publicProcedure
+  duplicate: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.user?.id;
@@ -126,7 +126,7 @@ export const strategiesRouter = router({
       });
     }),
 
-  getById: publicProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
+  getById: protectedProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
     const strategy = await ctx.prisma.strategy.findUnique({
       where: { id: input.id },
       include: {

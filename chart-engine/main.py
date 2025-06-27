@@ -268,6 +268,165 @@ def add_indicators(df: pd.DataFrame, indicators: Dict[str, Dict[str, Any]]) -> L
                         addplots.append(mpf.make_addplot(df['STOCH_K'], panel=5, color='blue', ylabel='Stochastic'))
                         addplots.append(mpf.make_addplot(df['STOCH_D'], panel=5, color='red'))
 
+            elif indicator_name.lower() == 'vwap':
+                # Volume Weighted Average Price
+                color = params.get('color', 'orange')
+                if len(df) >= 2 and 'volume' in df.columns:
+                    # Calculate VWAP
+                    typical_price = (df['high'] + df['low'] + df['close']) / 3
+                    vwap_values = (typical_price * df['volume']).cumsum() / df['volume'].cumsum()
+
+                    # Only add if we have valid values
+                    if not vwap_values.dropna().empty:
+                        df['VWAP'] = vwap_values
+                        addplots.append(mpf.make_addplot(df['VWAP'], color=color, linestyle='-', linewidth=2))
+
+            elif indicator_name.lower() == 'volume':
+                # Volume indicator (usually shown in separate panel)
+                color = params.get('color', 'lightblue')
+                if 'volume' in df.columns and not df['volume'].dropna().empty:
+                    # Volume is typically shown as bars in panel 1
+                    addplots.append(mpf.make_addplot(df['volume'], panel=1, type='bar', color=color, alpha=0.6, ylabel='Volume'))
+
+            elif indicator_name.lower() == 'wma':
+                period = params.get('period', 20)
+                color = params.get('color', 'green')
+                # Ensure we have enough data for WMA calculation
+                effective_period = min(period, max(1, len(df) - 1))
+                if effective_period >= 1:
+                    # Calculate WMA (Weighted Moving Average)
+                    weights = pd.Series(range(1, effective_period + 1))
+                    wma_values = df['close'].rolling(window=effective_period).apply(
+                        lambda x: (x * weights).sum() / weights.sum(), raw=False
+                    )
+                    # Only add if we have valid values
+                    if not wma_values.dropna().empty:
+                        df[f'WMA_{period}'] = wma_values
+                        addplots.append(mpf.make_addplot(df[f'WMA_{period}'], color=color))
+
+            elif indicator_name.lower() == 'cci':
+                period = params.get('period', 20)
+                color = params.get('color', 'cyan')
+                # Ensure we have enough data for CCI calculation
+                effective_period = min(period, max(2, len(df) - 1))
+                if len(df) >= effective_period + 1:
+                    # Calculate CCI (Commodity Channel Index)
+                    typical_price = (df['high'] + df['low'] + df['close']) / 3
+                    sma_tp = typical_price.rolling(window=effective_period).mean()
+                    mean_deviation = typical_price.rolling(window=effective_period).apply(
+                        lambda x: abs(x - x.mean()).mean(), raw=False
+                    )
+                    cci_values = (typical_price - sma_tp) / (0.015 * mean_deviation)
+
+                    # Only add if we have valid values
+                    if not cci_values.dropna().empty:
+                        df['CCI'] = cci_values
+                        # Use a separate panel for CCI
+                        if 'cci' not in panel_assignments:
+                            panel_assignments['cci'] = next_panel
+                            next_panel += 1
+                        addplots.append(mpf.make_addplot(df['CCI'], panel=panel_assignments['cci'], color=color, ylabel='CCI'))
+
+            elif indicator_name.lower() in ['williams_r', 'williamsr', 'williams%r']:
+                period = params.get('period', 14)
+                color = params.get('color', 'magenta')
+                # Ensure we have enough data for Williams %R calculation
+                effective_period = min(period, max(2, len(df) - 1))
+                if len(df) >= effective_period + 1:
+                    # Calculate Williams %R
+                    highest_high = df['high'].rolling(window=effective_period).max()
+                    lowest_low = df['low'].rolling(window=effective_period).min()
+                    williams_r = -100 * ((highest_high - df['close']) / (highest_high - lowest_low))
+
+                    # Only add if we have valid values
+                    if not williams_r.dropna().empty:
+                        df['WILLIAMS_R'] = williams_r
+                        # Use a separate panel for Williams %R
+                        if 'williams_r' not in panel_assignments:
+                            panel_assignments['williams_r'] = next_panel
+                            next_panel += 1
+                        addplots.append(mpf.make_addplot(df['WILLIAMS_R'], panel=panel_assignments['williams_r'], color=color, ylabel='Williams %R'))
+
+            elif indicator_name.lower() == 'adx':
+                period = params.get('period', 14)
+                color = params.get('color', 'darkred')
+                # Ensure we have enough data for ADX calculation
+                effective_period = min(period, max(2, len(df) - 1))
+                if len(df) >= effective_period + 2:
+                    # Calculate ADX (Average Directional Index)
+                    # Calculate True Range (TR)
+                    tr1 = abs(df['high'] - df['low'])
+                    tr2 = abs(df['high'] - df['close'].shift())
+                    tr3 = abs(df['low'] - df['close'].shift())
+                    tr = pd.DataFrame({'tr1': tr1, 'tr2': tr2, 'tr3': tr3}).max(axis=1)
+
+                    # Calculate Directional Movement
+                    plus_dm = df['high'].diff()
+                    minus_dm = -df['low'].diff()
+                    plus_dm[plus_dm < 0] = 0
+                    minus_dm[minus_dm < 0] = 0
+
+                    # Smooth TR, +DM, -DM
+                    tr_smooth = tr.rolling(window=effective_period).mean()
+                    plus_dm_smooth = plus_dm.rolling(window=effective_period).mean()
+                    minus_dm_smooth = minus_dm.rolling(window=effective_period).mean()
+
+                    # Calculate +DI and -DI
+                    plus_di = 100 * plus_dm_smooth / tr_smooth
+                    minus_di = 100 * minus_dm_smooth / tr_smooth
+
+                    # Calculate DX and ADX
+                    dx = 100 * abs(plus_di - minus_di) / (plus_di + minus_di)
+                    adx_values = dx.rolling(window=effective_period).mean()
+
+                    # Only add if we have valid values
+                    if not adx_values.dropna().empty:
+                        df['ADX'] = adx_values
+                        # Use a separate panel for ADX
+                        if 'adx' not in panel_assignments:
+                            panel_assignments['adx'] = next_panel
+                            next_panel += 1
+                        addplots.append(mpf.make_addplot(df['ADX'], panel=panel_assignments['adx'], color=color, ylabel='ADX'))
+
+            elif indicator_name.lower() in ['psar', 'parabolicsar']:
+                initial_af = params.get('af_initial', 0.02)
+                max_af = params.get('af_max', 0.2)
+                color = params.get('color', 'yellow')
+
+                if len(df) >= 3:
+                    # Calculate Parabolic SAR
+                    psar = df['close'].copy()
+                    af = initial_af
+                    ep = df['high'].iloc[0]
+                    trend = 1  # 1 for uptrend, -1 for downtrend
+
+                    for i in range(1, len(df)):
+                        if trend == 1:  # Uptrend
+                            psar.iloc[i] = psar.iloc[i-1] + af * (ep - psar.iloc[i-1])
+                            if df['high'].iloc[i] > ep:
+                                ep = df['high'].iloc[i]
+                                af = min(af + initial_af, max_af)
+                            if df['low'].iloc[i] < psar.iloc[i]:
+                                trend = -1
+                                psar.iloc[i] = ep
+                                ep = df['low'].iloc[i]
+                                af = initial_af
+                        else:  # Downtrend
+                            psar.iloc[i] = psar.iloc[i-1] + af * (ep - psar.iloc[i-1])
+                            if df['low'].iloc[i] < ep:
+                                ep = df['low'].iloc[i]
+                                af = min(af + initial_af, max_af)
+                            if df['high'].iloc[i] > psar.iloc[i]:
+                                trend = 1
+                                psar.iloc[i] = ep
+                                ep = df['high'].iloc[i]
+                                af = initial_af
+
+                    # Only add if we have valid values
+                    if not psar.dropna().empty:
+                        df['PSAR'] = psar
+                        addplots.append(mpf.make_addplot(df['PSAR'], type='scatter', markersize=20, color=color, alpha=0.7))
+
         except Exception as e:
             logging.error(f"Error calculating indicator {indicator_name}: {str(e)}")
             # Continue processing other indicators instead of failing completely
@@ -622,6 +781,55 @@ async def get_supported_indicators():
                 "params": ["k_period", "d_period"],
                 "defaults": {"k_period": 14, "d_period": 3},
                 "panel": "oscillator"
+            },
+            {
+                "name": "vwap",
+                "display_name": "Volume Weighted Average Price",
+                "params": ["color"],
+                "defaults": {"color": "orange"},
+                "panel": "main"
+            },
+            {
+                "name": "volume",
+                "display_name": "Volume",
+                "params": ["color"],
+                "defaults": {"color": "lightblue"},
+                "panel": "main"
+            },
+            {
+                "name": "wma",
+                "display_name": "Weighted Moving Average",
+                "params": ["period", "color"],
+                "defaults": {"period": 20, "color": "green"},
+                "panel": "main"
+            },
+            {
+                "name": "cci",
+                "display_name": "Commodity Channel Index",
+                "params": ["period", "color"],
+                "defaults": {"period": 20, "color": "cyan"},
+                "panel": "main"
+            },
+            {
+                "name": "williams_r",
+                "display_name": "Williams %R",
+                "params": ["period", "color"],
+                "defaults": {"period": 14, "color": "magenta"},
+                "panel": "oscillator"
+            },
+            {
+                "name": "adx",
+                "display_name": "Average Directional Index",
+                "params": ["period", "color"],
+                "defaults": {"period": 14, "color": "darkred"},
+                "panel": "main"
+            },
+            {
+                "name": "psar",
+                "display_name": "Parabolic SAR",
+                "params": ["af_initial", "af_max", "color"],
+                "defaults": {"af_initial": 0.02, "af_max": 0.2, "color": "yellow"},
+                "panel": "main"
             }
         ]
     }

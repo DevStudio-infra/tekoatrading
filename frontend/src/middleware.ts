@@ -55,7 +55,8 @@ function isProtectedRoute(pathname: string): boolean {
     pathname.includes("/analytics") ||
     pathname.includes("/settings") ||
     pathname.includes("/trades") ||
-    pathname.includes("/broker-credentials")
+    pathname.includes("/broker-credentials") ||
+    pathname.includes("/test-auth")
   );
 }
 

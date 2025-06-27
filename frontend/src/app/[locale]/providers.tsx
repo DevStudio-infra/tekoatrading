@@ -1,17 +1,30 @@
 "use client";
 
-import { ReactNode, useState } from "react";
-import { ClerkProvider } from "@clerk/nextjs";
+import { ReactNode, useState, useMemo } from "react";
+import { ClerkProvider, useAuth } from "@clerk/nextjs";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { trpc, trpcClient } from "../../lib/trpc";
+import { trpc, createTRPCClient } from "../../lib/trpc";
 
 interface ProvidersProps {
   children: ReactNode;
 }
 
-export function Providers({ children }: ProvidersProps) {
+function TRPCProviderWithAuth({ children }: { children: ReactNode }) {
+  const { getToken } = useAuth();
   const [queryClient] = useState(() => new QueryClient());
 
+  const trpcClient = useMemo(() => {
+    return createTRPCClient(getToken);
+  }, [getToken]);
+
+  return (
+    <trpc.Provider client={trpcClient} queryClient={queryClient}>
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    </trpc.Provider>
+  );
+}
+
+export function Providers({ children }: ProvidersProps) {
   return (
     <ClerkProvider
       publishableKey={process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY!}
@@ -32,9 +45,7 @@ export function Providers({ children }: ProvidersProps) {
         },
       }}
     >
-      <trpc.Provider client={trpcClient} queryClient={queryClient}>
-        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-      </trpc.Provider>
+      <TRPCProviderWithAuth>{children}</TRPCProviderWithAuth>
     </ClerkProvider>
   );
 }

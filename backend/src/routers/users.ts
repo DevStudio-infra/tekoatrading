@@ -1,82 +1,179 @@
 import { z } from "zod";
-import { router, publicProcedure } from "../trpc";
+import { router, publicProcedure, protectedProcedure } from "../trpc";
+import { prisma } from "../prisma";
+import { logger } from "../logger";
 
 export const usersRouter = router({
-  me: publicProcedure.query(async ({ ctx }) => {
-    // For demo purposes, return a mock user
-    return {
-      id: "demo-user",
-      email: "demo@example.com",
-      name: "Demo User",
-    };
+  // Get current authenticated user (protected)
+  me: protectedProcedure.query(async ({ ctx }) => {
+    try {
+      // ctx.user is populated by protectedProcedure from Clerk token
+      return {
+        id: ctx.user.id,
+        email: ctx.user.email,
+        name: ctx.user.name,
+        firstName: ctx.user.firstName,
+        lastName: ctx.user.lastName,
+        clerkId: ctx.user.clerkId,
+        createdAt: ctx.user.createdAt,
+        updatedAt: ctx.user.updatedAt,
+      };
+    } catch (error) {
+      logger.error("Error fetching current user:", error);
+      throw new Error("Failed to fetch user profile");
+    }
   }),
 
+  // Create a new user (typically called by Clerk webhooks)
   create: publicProcedure
     .input(
       z.object({
+        clerkId: z.string(),
         email: z.string().email(),
+        firstName: z.string().optional(),
+        lastName: z.string().optional(),
         name: z.string().optional(),
       }),
     )
-    .mutation(async ({ ctx, input }) => {
-      return await ctx.prisma.user.create({
-        data: {
-          email: input.email,
-          name: input.name,
-        },
-      });
+    .mutation(async ({ input }) => {
+      try {
+        const user = await prisma.user.create({
+          data: {
+            clerkId: input.clerkId,
+            email: input.email,
+            firstName: input.firstName,
+            lastName: input.lastName,
+            name: input.name || `${input.firstName || ""} ${input.lastName || ""}`.trim(),
+          },
+        });
+
+        logger.info(`Created new user: ${user.id} (Clerk ID: ${input.clerkId})`);
+        return user;
+      } catch (error) {
+        logger.error("Error creating user:", error);
+        throw new Error("Failed to create user");
+      }
     }),
 
-  update: publicProcedure
+  // Update user profile (protected)
+  update: protectedProcedure
     .input(
       z.object({
-        id: z.string(),
+        firstName: z.string().optional(),
+        lastName: z.string().optional(),
         name: z.string().optional(),
         email: z.string().email().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const { id, ...updateData } = input;
-      return await ctx.prisma.user.update({
-        where: { id },
-        data: updateData,
-      });
+      try {
+        const updatedUser = await prisma.user.update({
+          where: { id: ctx.user.id },
+          data: {
+            firstName: input.firstName,
+            lastName: input.lastName,
+            name:
+              input.name ||
+              `${input.firstName || ctx.user.firstName || ""} ${input.lastName || ctx.user.lastName || ""}`.trim(),
+            email: input.email,
+          },
+        });
+
+        logger.info(`Updated user profile: ${ctx.user.id}`);
+        return updatedUser;
+      } catch (error) {
+        logger.error("Error updating user:", error);
+        throw new Error("Failed to update user profile");
+      }
     }),
 
-  delete: publicProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
-    return await ctx.prisma.user.delete({
-      where: { id: input.id },
-    });
+  // Delete user (protected)
+  delete: protectedProcedure.mutation(async ({ ctx }) => {
+    try {
+      await prisma.user.delete({
+        where: { id: ctx.user.id },
+      });
+
+      logger.info(`Deleted user: ${ctx.user.id}`);
+      return { success: true };
+    } catch (error) {
+      logger.error("Error deleting user:", error);
+      throw new Error("Failed to delete user");
+    }
   }),
 
-  getProfile: publicProcedure
-    .input(z.object({ userId: z.string() }))
-    .query(async ({ ctx, input }) => {
-      return await ctx.prisma.user.findUnique({
-        where: { id: input.userId },
+  // Get user profile with related data (protected)
+  getProfile: protectedProcedure.query(async ({ ctx }) => {
+    try {
+      const userWithRelations = await prisma.user.findUnique({
+        where: { id: ctx.user.id },
         include: {
           bots: {
             include: {
-              trades: true,
+              _count: {
+                select: {
+                  trades: true,
+                },
+              },
             },
           },
           strategies: true,
-          portfolios: true,
+          brokerCredentials: {
+            select: {
+              id: true,
+              name: true,
+              broker: true,
+              isDemo: true,
+              isActive: true,
+            },
+          },
         },
       });
-    }),
 
-  getCurrent: publicProcedure.query(async ({ ctx }) => {
-    // For now, return a mock user - this should be replaced with actual Clerk integration
-    return {
-      id: "user_2x7ZBVN7sYTSc1moT7b4QSDP8J9",
-      email: "test@example.com",
-      firstName: "Test",
-      lastName: "User",
-    };
+      if (!userWithRelations) {
+        throw new Error("User not found");
+      }
+
+      // Calculate user statistics
+      const totalBots = userWithRelations.bots.length;
+      const activeBots = userWithRelations.bots.filter((bot) => bot.isActive).length;
+      const totalTrades = userWithRelations.bots.reduce((sum, bot) => sum + bot._count.trades, 0);
+
+      return {
+        ...userWithRelations,
+        stats: {
+          totalBots,
+          activeBots,
+          totalTrades,
+          totalStrategies: userWithRelations.strategies.length,
+          totalCredentials: userWithRelations.brokerCredentials.length,
+        },
+      };
+    } catch (error) {
+      logger.error("Error fetching user profile:", error);
+      throw new Error("Failed to fetch user profile");
+    }
   }),
 
-  updateProfile: publicProcedure
+  // Get current user (alias for me - protected)
+  getCurrent: protectedProcedure.query(async ({ ctx }) => {
+    try {
+      return {
+        id: ctx.user.id,
+        email: ctx.user.email,
+        firstName: ctx.user.firstName,
+        lastName: ctx.user.lastName,
+        name: ctx.user.name,
+        clerkId: ctx.user.clerkId,
+      };
+    } catch (error) {
+      logger.error("Error fetching current user:", error);
+      throw new Error("Failed to fetch current user");
+    }
+  }),
+
+  // Update user profile (alias for update - protected)
+  updateProfile: protectedProcedure
     .input(
       z.object({
         firstName: z.string().optional(),
@@ -85,15 +182,80 @@ export const usersRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      // Mock implementation - replace with actual user update logic
-      return {
-        success: true,
-        user: {
-          id: "user_2x7ZBVN7sYTSc1moT7b4QSDP8J9",
-          email: input.email || "test@example.com",
-          firstName: input.firstName || "Test",
-          lastName: input.lastName || "User",
-        },
-      };
+      try {
+        const updatedUser = await prisma.user.update({
+          where: { id: ctx.user.id },
+          data: {
+            firstName: input.firstName,
+            lastName: input.lastName,
+            name: `${input.firstName || ctx.user.firstName || ""} ${input.lastName || ctx.user.lastName || ""}`.trim(),
+            email: input.email,
+          },
+        });
+
+        logger.info(`Updated user profile: ${ctx.user.id}`);
+        return {
+          success: true,
+          user: {
+            id: updatedUser.id,
+            email: updatedUser.email,
+            firstName: updatedUser.firstName,
+            lastName: updatedUser.lastName,
+            name: updatedUser.name,
+          },
+        };
+      } catch (error) {
+        logger.error("Error updating user profile:", error);
+        throw new Error("Failed to update user profile");
+      }
+    }),
+
+  // Find or create user by Clerk ID (used by webhooks)
+  findOrCreateByClerkId: publicProcedure
+    .input(
+      z.object({
+        clerkId: z.string(),
+        email: z.string().email(),
+        firstName: z.string().optional(),
+        lastName: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      try {
+        const existingUser = await prisma.user.findUnique({
+          where: { clerkId: input.clerkId },
+        });
+
+        if (existingUser) {
+          // Update existing user if needed
+          const updatedUser = await prisma.user.update({
+            where: { clerkId: input.clerkId },
+            data: {
+              email: input.email,
+              firstName: input.firstName,
+              lastName: input.lastName,
+              name: `${input.firstName || ""} ${input.lastName || ""}`.trim(),
+            },
+          });
+          return updatedUser;
+        }
+
+        // Create new user
+        const newUser = await prisma.user.create({
+          data: {
+            clerkId: input.clerkId,
+            email: input.email,
+            firstName: input.firstName,
+            lastName: input.lastName,
+            name: `${input.firstName || ""} ${input.lastName || ""}`.trim(),
+          },
+        });
+
+        logger.info(`Created new user from Clerk: ${newUser.id} (Clerk ID: ${input.clerkId})`);
+        return newUser;
+      } catch (error) {
+        logger.error("Error finding or creating user:", error);
+        throw new Error("Failed to process user");
+      }
     }),
 });

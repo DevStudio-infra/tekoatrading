@@ -22,7 +22,7 @@ export function HomeCTA() {
         <h2 className="text-3xl font-bold text-foreground mb-4">{t("cta.title")}</h2>
         <p className="text-xl text-muted-foreground mb-8">{t("cta.subtitle")}</p>
         <Button asChild size="lg">
-          <Link href={`/${locale}/sign-up`}>{t("cta.createAccount")}</Link>
+          <Link href={`/${locale}/sign-up` as any}>{t("cta.createAccount")}</Link>
         </Button>
       </div>
     </div>

@@ -3,6 +3,7 @@ import dotenv from "dotenv";
 import cors from "cors";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { appRouter } from "./routers/root";
+import { createContext } from "./trpc";
 import { logger } from "./logger";
 import clerkWebhookRouter from "./routes/clerk-webhook.routes";
 import { schedulerService } from "./services/scheduler.service";
@@ -32,7 +33,7 @@ app.use(
   "/trpc",
   createExpressMiddleware({
     router: appRouter,
-    createContext: () => ({}), // Basic context for now
+    createContext,
   }),
 );
 

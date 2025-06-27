@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { router, publicProcedure, protectedProcedure } from "../trpc";
+import { router, publicProcedure, protectedProcedure, debugProcedure } from "../trpc";
 import { prisma } from "../prisma";
 import { botEvaluationService } from "../services/bot-evaluation.service";
 import { brokerIntegrationService } from "../services/broker-integration.service";
@@ -55,6 +55,30 @@ const brokerCredentialSchema = z.object({
 });
 
 export const botsRouter = router({
+  // Debug endpoint to test authentication
+  debugAuth: debugProcedure.query(async ({ ctx }) => {
+    return {
+      hasUser: !!ctx.user,
+      userId: ctx.user?.id,
+      clerkId: ctx.user?.clerkId,
+      message: "Debug endpoint reached successfully",
+    };
+  }),
+
+  // Simple test endpoint that logs everything
+  testConnection: publicProcedure.query(async ({ ctx }) => {
+    logger.info("TEST ENDPOINT: Request received!");
+    logger.info("TEST ENDPOINT: User found:", !!ctx.user);
+    logger.info("TEST ENDPOINT: Context keys:", Object.keys(ctx));
+
+    return {
+      success: true,
+      hasUser: !!ctx.user,
+      timestamp: new Date().toISOString(),
+      message: "Test endpoint reached successfully",
+    };
+  }),
+
   // Get all bots for a user
   getAll: protectedProcedure.query(async ({ ctx }) => {
     try {
@@ -489,9 +513,9 @@ export const botsRouter = router({
     }),
 
   // Create broker credential
-  createBrokerCredential: publicProcedure
-    .input(brokerCredentialSchema.extend({ userId: z.string() }))
-    .mutation(async ({ input }) => {
+  createBrokerCredential: protectedProcedure
+    .input(brokerCredentialSchema)
+    .mutation(async ({ input, ctx }) => {
       try {
         // Test connection first
         const connectionTest = await brokerIntegrationService.testConnection({
@@ -507,7 +531,7 @@ export const botsRouter = router({
 
         const credential = await prisma.brokerCredential.create({
           data: {
-            userId: input.userId,
+            userId: ctx.user.id,
             name: input.name,
             broker: input.broker,
             isDemo: input.isDemo,
@@ -528,45 +552,42 @@ export const botsRouter = router({
     }),
 
   // Get broker credentials
-  getBrokerCredentials: publicProcedure
-    .input(z.object({ userId: z.string() }))
-    .query(async ({ input }) => {
-      try {
-        const credentials = await prisma.brokerCredential.findMany({
-          where: { userId: input.userId },
-          select: {
-            id: true,
-            name: true,
-            broker: true,
-            isDemo: true,
-            isActive: true,
-            lastUsed: true,
-            createdAt: true,
-          },
-          orderBy: { createdAt: "desc" },
-        });
+  getBrokerCredentials: protectedProcedure.query(async ({ ctx }) => {
+    try {
+      const credentials = await prisma.brokerCredential.findMany({
+        where: { userId: ctx.user.id },
+        select: {
+          id: true,
+          name: true,
+          broker: true,
+          isDemo: true,
+          isActive: true,
+          lastUsed: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: "desc" },
+      });
 
-        return credentials;
-      } catch (error) {
-        logger.error("Error fetching broker credentials:", error);
-        throw new Error("Failed to fetch broker credentials");
-      }
-    }),
+      return credentials;
+    } catch (error) {
+      logger.error("Error fetching broker credentials:", error);
+      throw new Error("Failed to fetch broker credentials");
+    }
+  }),
 
   // Test broker connection
-  testBrokerConnection: publicProcedure
+  testBrokerConnection: protectedProcedure
     .input(
       z.object({
         credentialId: z.string(),
-        userId: z.string(),
       }),
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       try {
         const credential = await prisma.brokerCredential.findFirst({
           where: {
             id: input.credentialId,
-            userId: input.userId,
+            userId: ctx.user.id,
           },
         });
 

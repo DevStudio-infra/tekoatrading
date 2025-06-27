@@ -1,6 +1,1 @@
 {
-  "/[locale]/page": "app/[locale]/page.js",
-  "/[locale]/(dashboard)/dashboard/page": "app/[locale]/(dashboard)/dashboard/page.js",
-  "/[locale]/(dashboard)/settings/page": "app/[locale]/(dashboard)/settings/page.js",
-  "/[locale]/(dashboard)/settings/broker-credentials/page": "app/[locale]/(dashboard)/settings/broker-credentials/page.js"
-}

@@ -1,496 +1,363 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { trpc } from "@/lib/trpc";
-import { Button } from "@/features/shared/components/ui/button";
-import { Input } from "@/features/shared/components/ui/input";
-import { Label } from "@/features/shared/components/ui/label";
-import { Card } from "@/features/shared/components/ui/card";
-import { Badge } from "@/features/shared/components/ui/badge";
-import { Switch } from "@/features/shared/components/ui/switch";
 import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/features/shared/components/ui/form";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/features/shared/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/features/shared/components/ui/select";
-import { Plus, Shield, Trash2, CheckCircle, XCircle, Loader2, TestTube } from "lucide-react";
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "../../shared/components/ui/card";
+import { Button } from "../../shared/components/ui/button";
+import { Input } from "../../shared/components/ui/input";
+import { Label } from "../../shared/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../shared/components/ui/tabs";
+import { Checkbox } from "../../shared/components/ui/checkbox";
 import { toast } from "sonner";
+import { trpc } from "@/lib/trpc";
 
-const credentialSchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  broker: z.string().min(1, "Broker is required"),
+// Simplified form schema that handles all broker types
+const credentialsSchema = z.object({
+  name: z.string().min(1, "Credential name is required"),
+  brokerName: z.string().min(1, "Broker name is required"),
   isDemo: z.boolean(),
-  credentials: z.object({
-    apiKey: z.string().min(1, "API Key is required"),
-    identifier: z.string().min(1, "Identifier is required"),
-    password: z.string().min(1, "Password is required"),
-  }),
+  isActive: z.boolean(),
+  // Common fields
+  apiKey: z.string().min(1, "API key is required"),
+  // Capital.com specific fields
+  identifier: z.string().optional(),
+  password: z.string().optional(),
+  // Binance specific fields
+  secretKey: z.string().optional(),
 });
 
-type CredentialFormData = z.infer<typeof credentialSchema>;
+type CredentialsFormData = z.infer<typeof credentialsSchema>;
+
+interface BrokerCredential {
+  id: string;
+  name: string;
+  brokerName: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  isVerified: boolean;
+}
 
 interface BrokerCredentialsFormProps {
   userId: string;
-  mode?: "create" | "view" | "both";
+  mode: "create" | "edit" | "both";
   showExisting?: boolean;
-  onCredentialCreated?: (credential: any) => void;
-  onCredentialSelected?: (credentialId: string) => void;
-  selectedCredentialId?: string;
+  onCredentialCreated?: (credential: BrokerCredential) => void;
 }
 
 export function BrokerCredentialsForm({
   userId,
-  mode = "both",
-  showExisting = true,
+  mode,
+  showExisting = false,
   onCredentialCreated,
-  onCredentialSelected,
-  selectedCredentialId,
 }: BrokerCredentialsFormProps) {
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [testingConnection, setTestingConnection] = useState<string | null>(null);
+  const [selectedBroker, setSelectedBroker] = useState<"capital.com" | "binance">("capital.com");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const form = useForm<CredentialFormData>({
-    resolver: zodResolver(credentialSchema),
+  // TRPC mutations and queries
+  const createCredentialMutation = trpc.bots.createBrokerCredential.useMutation();
+  const { data: existingCredentials = [], refetch: refetchCredentials } =
+    trpc.bots.getBrokerCredentials.useQuery(undefined, { enabled: showExisting });
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+    setValue,
+    watch,
+    clearErrors,
+  } = useForm<CredentialsFormData>({
+    resolver: zodResolver(credentialsSchema),
     defaultValues: {
       name: "",
-      broker: "capital.com",
-      isDemo: true,
-      credentials: {
+      brokerName: "capital.com",
+      isDemo: false,
+      isActive: true,
+      apiKey: "",
+      identifier: "",
+      password: "",
+      secretKey: "",
+    },
+  });
+
+  const watchedBroker = watch("brokerName");
+
+  React.useEffect(() => {
+    setValue("brokerName", selectedBroker);
+    // Clear all field errors when switching brokers
+    clearErrors();
+  }, [selectedBroker, setValue, clearErrors]);
+
+  const validateForm = (data: CredentialsFormData): string | null => {
+    if (data.brokerName === "capital.com") {
+      if (!data.identifier) return "Identifier is required for Capital.com";
+      if (!data.password) return "Password is required for Capital.com";
+    } else if (data.brokerName === "binance") {
+      if (!data.secretKey) return "Secret key is required for Binance";
+    }
+    return null;
+  };
+
+  const onSubmit = async (data: CredentialsFormData) => {
+    // Custom validation for broker-specific fields
+    const validationError = validateForm(data);
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      // Prepare credentials object for Capital.com (only supported broker currently)
+      if (data.brokerName !== "capital.com") {
+        throw new Error("Only Capital.com is currently supported");
+      }
+
+      const credentials = {
+        apiKey: data.apiKey,
+        identifier: data.identifier!,
+        password: data.password!,
+      };
+
+      // Call the actual API to create broker credential
+      const result = await createCredentialMutation.mutateAsync({
+        name: data.name,
+        broker: data.brokerName,
+        isDemo: data.isDemo,
+        credentials,
+      });
+
+      // Create the credential object for callback
+      const newCredential: BrokerCredential = {
+        id: result.id,
+        name: result.name,
+        brokerName: result.broker,
+        isActive: result.isActive ?? true,
+        createdAt:
+          typeof result.createdAt === "string"
+            ? result.createdAt
+            : new Date(result.createdAt).toISOString(),
+        updatedAt: result.updatedAt
+          ? typeof result.updatedAt === "string"
+            ? result.updatedAt
+            : new Date(result.updatedAt).toISOString()
+          : typeof result.createdAt === "string"
+            ? result.createdAt
+            : new Date(result.createdAt).toISOString(),
+        isVerified: true, // Successful creation means it's verified
+      };
+
+      // Refresh the credentials list if showing existing
+      if (showExisting) {
+        refetchCredentials();
+      }
+
+      onCredentialCreated?.(newCredential);
+      reset({
+        name: "",
+        brokerName: selectedBroker,
+        isDemo: false,
+        isActive: true,
         apiKey: "",
         identifier: "",
         password: "",
-      },
-    },
-  });
+        secretKey: "",
+      });
 
-  // Queries
-  const { data: credentials, refetch: refetchCredentials } =
-    trpc.bots.getBrokerCredentials.useQuery({
-      userId,
-    });
-
-  // Mutations
-  const createCredential = trpc.bots.createBrokerCredential.useMutation({
-    onSuccess: (data) => {
-      toast.success("Broker credentials created successfully!");
-      form.reset();
-      setIsCreateDialogOpen(false);
-      refetchCredentials();
-      onCredentialCreated?.(data);
-    },
-    onError: (error) => {
-      toast.error(`Failed to create credentials: ${error.message}`);
-    },
-  });
-
-  const testConnection = trpc.bots.testBrokerConnection.useMutation({
-    onSuccess: (result) => {
-      if (result.success) {
-        toast.success("Connection test successful!");
-      } else {
-        toast.error(`Connection failed: ${result.error}`);
-      }
-      setTestingConnection(null);
-    },
-    onError: (error) => {
-      toast.error(`Connection test failed: ${error.message}`);
-      setTestingConnection(null);
-    },
-  });
-
-  const handleCreateCredential = (data: CredentialFormData) => {
-    createCredential.mutate({
-      userId,
-      ...data,
-    });
+      toast.success(
+        `Broker credential "${data.name}" created successfully and connection verified!`,
+      );
+    } catch (error) {
+      console.error("Error saving credentials:", error);
+      const errorMessage = error instanceof Error ? error.message : "Failed to save credentials";
+      toast.error(errorMessage);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleTestConnection = (credentialId: string) => {
-    setTestingConnection(credentialId);
-    testConnection.mutate({
-      credentialId,
-      userId,
-    });
-  };
+  const renderCapitalComForm = () => (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="capitalApiKey">API Key *</Label>
+        <Input
+          id="capitalApiKey"
+          placeholder="Enter your Capital.com API key"
+          {...register("apiKey")}
+        />
+        {errors.apiKey && <p className="text-sm text-red-500">{errors.apiKey.message}</p>}
+      </div>
 
-  const formatDate = (date: string | Date) => {
-    return new Date(date).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+      <div className="space-y-2">
+        <Label htmlFor="capitalIdentifier">Identifier *</Label>
+        <Input
+          id="capitalIdentifier"
+          placeholder="Enter your Capital.com identifier"
+          {...register("identifier")}
+        />
+        {errors.identifier && <p className="text-sm text-red-500">{errors.identifier.message}</p>}
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="capitalPassword">Password *</Label>
+        <Input
+          id="capitalPassword"
+          type="password"
+          placeholder="Enter your Capital.com password"
+          {...register("password")}
+        />
+        {errors.password && <p className="text-sm text-red-500">{errors.password.message}</p>}
+      </div>
+
+      <div className="flex items-center space-x-2">
+        <Checkbox id="capitalDemo" {...register("isDemo")} />
+        <Label htmlFor="capitalDemo">Use Demo Account</Label>
+      </div>
+    </div>
+  );
+
+  const renderBinanceForm = () => (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="binanceApiKey">API Key *</Label>
+        <Input
+          id="binanceApiKey"
+          placeholder="Enter your Binance API key"
+          {...register("apiKey")}
+        />
+        {errors.apiKey && <p className="text-sm text-red-500">{errors.apiKey.message}</p>}
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="binanceSecretKey">Secret Key *</Label>
+        <Input
+          id="binanceSecretKey"
+          type="password"
+          placeholder="Enter your Binance secret key"
+          {...register("secretKey")}
+        />
+        {errors.secretKey && <p className="text-sm text-red-500">{errors.secretKey.message}</p>}
+      </div>
+
+      <div className="flex items-center space-x-2">
+        <Checkbox id="binanceTestnet" {...register("isDemo")} />
+        <Label htmlFor="binanceTestnet">Use Testnet</Label>
+      </div>
+    </div>
+  );
+
+  const handleBrokerChange = (broker: string) => {
+    const typedBroker = broker as "capital.com" | "binance";
+    setSelectedBroker(typedBroker);
   };
 
   return (
     <div className="space-y-6">
-      {/* Existing Credentials */}
-      {showExisting && mode !== "create" && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold">Existing Credentials</h3>
-            {mode === "both" && (
-              <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button size="sm">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Credentials
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-md">
-                  <DialogHeader>
-                    <DialogTitle>Add Broker Credentials</DialogTitle>
-                  </DialogHeader>
-                  <Form {...form}>
-                    <form
-                      onSubmit={form.handleSubmit(handleCreateCredential)}
-                      className="space-y-4"
-                    >
-                      <FormField
-                        control={form.control}
-                        name="name"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Credential Name</FormLabel>
-                            <FormControl>
-                              <Input placeholder="My Trading Account" {...field} />
-                            </FormControl>
-                            <FormDescription>
-                              A friendly name to identify this broker connection
-                            </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+      {mode === "create" || mode === "both" ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Add New Broker Credentials</CardTitle>
+            <CardDescription>
+              Connect your trading account to enable automated trading. Your credentials will be
+              tested and securely encrypted.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="credentialName">Credential Name *</Label>
+                <Input
+                  id="credentialName"
+                  placeholder="Enter a name for this credential"
+                  {...register("name")}
+                />
+                {errors.name && <p className="text-sm text-red-500">{errors.name.message}</p>}
+              </div>
 
-                      <FormField
-                        control={form.control}
-                        name="broker"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Broker</FormLabel>
-                            <Select onValueChange={field.onChange} defaultValue={field.value}>
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select a broker" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="capital.com">Capital.com</SelectItem>
-                                <SelectItem value="binance">Binance</SelectItem>
-                                <SelectItem value="coinbase">Coinbase</SelectItem>
-                                <SelectItem value="other">Other</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+              <div className="space-y-2">
+                <Label>Broker Type</Label>
+                <Tabs value={selectedBroker} onValueChange={handleBrokerChange} className="w-full">
+                  <TabsList className="grid grid-cols-2 w-full">
+                    <TabsTrigger value="capital.com">Capital.com</TabsTrigger>
+                    <TabsTrigger value="binance" disabled>
+                      Binance (Coming Soon)
+                    </TabsTrigger>
+                  </TabsList>
 
-                      <FormField
-                        control={form.control}
-                        name="credentials.apiKey"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>API Key</FormLabel>
-                            <FormControl>
-                              <Input type="password" placeholder="Enter API Key" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                  <TabsContent value="capital.com">{renderCapitalComForm()}</TabsContent>
 
-                      <FormField
-                        control={form.control}
-                        name="credentials.identifier"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Identifier</FormLabel>
-                            <FormControl>
-                              <Input placeholder="Enter Identifier" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                  <TabsContent value="binance">{renderBinanceForm()}</TabsContent>
+                </Tabs>
+              </div>
 
-                      <FormField
-                        control={form.control}
-                        name="credentials.password"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Password</FormLabel>
-                            <FormControl>
-                              <Input type="password" placeholder="Enter Password" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+              <div className="flex items-center space-x-2">
+                <Checkbox id="credentialActive" defaultChecked {...register("isActive")} />
+                <Label htmlFor="credentialActive">Enable this credential</Label>
+              </div>
 
-                      <FormField
-                        control={form.control}
-                        name="isDemo"
-                        render={({ field }) => (
-                          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                            <div className="space-y-0.5">
-                              <FormLabel>Demo Account</FormLabel>
-                              <FormDescription>
-                                Enable demo mode for testing purposes
-                              </FormDescription>
-                            </div>
-                            <FormControl>
-                              <Switch checked={field.value} onCheckedChange={field.onChange} />
-                            </FormControl>
-                          </FormItem>
-                        )}
-                      />
+              <Button type="submit" disabled={isSubmitting} className="w-full">
+                {isSubmitting ? "Testing connection and saving..." : "Save and Test Credentials"}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      ) : null}
 
-                      <div className="flex space-x-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => setIsCreateDialogOpen(false)}
-                          className="flex-1"
-                        >
-                          Cancel
-                        </Button>
-                        <Button
-                          type="submit"
-                          disabled={createCredential.isLoading}
-                          className="flex-1"
-                        >
-                          {createCredential.isLoading ? (
-                            <>
-                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                              Creating...
-                            </>
-                          ) : (
-                            "Create"
-                          )}
-                        </Button>
-                      </div>
-                    </form>
-                  </Form>
-                </DialogContent>
-              </Dialog>
-            )}
-          </div>
-
-          {credentials && credentials.length > 0 ? (
-            <div className="grid gap-4">
-              {credentials.map((credential) => (
-                <Card
-                  key={credential.id}
-                  className={`p-4 cursor-pointer transition-colors ${
-                    selectedCredentialId === credential.id
-                      ? "ring-2 ring-primary bg-primary/5"
-                      : "hover:bg-accent"
-                  }`}
-                  onClick={() => onCredentialSelected?.(credential.id)}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      <Shield className="h-5 w-5 text-primary" />
-                      <div>
-                        <h4 className="font-medium">{credential.name}</h4>
-                        <p className="text-sm text-muted-foreground">
-                          {credential.broker} • {credential.isDemo ? "Demo" : "Live"}
-                        </p>
-                        {credential.lastUsed && (
-                          <p className="text-xs text-muted-foreground">
-                            Last used: {formatDate(credential.lastUsed)}
-                          </p>
-                        )}
-                      </div>
+      {showExisting && (mode === "edit" || mode === "both") ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Existing Credentials</CardTitle>
+            <CardDescription>Manage your existing broker connections</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {existingCredentials.length === 0 ? (
+              <p className="text-muted-foreground text-center py-4">
+                No broker credentials configured yet.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {existingCredentials.map((credential) => (
+                  <div
+                    key={credential.id}
+                    className="flex items-center justify-between p-3 border rounded-lg"
+                  >
+                    <div>
+                      <h4 className="font-medium">{credential.name}</h4>
+                      <p className="text-sm text-muted-foreground">
+                        {credential.broker} • {credential.isActive ? "Active" : "Inactive"} •{" "}
+                        {credential.isDemo ? "Demo" : "Live"}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Created: {new Date(credential.createdAt).toLocaleDateString()}
+                      </p>
                     </div>
-                    <div className="flex items-center space-x-2">
-                      <Badge variant={credential.isActive ? "default" : "secondary"}>
-                        {credential.isActive ? "Active" : "Inactive"}
-                      </Badge>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleTestConnection(credential.id);
-                        }}
-                        disabled={testingConnection === credential.id}
-                      >
-                        {testingConnection === credential.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <TestTube className="h-4 w-4" />
-                        )}
+                    <div className="flex space-x-2">
+                      <Button variant="outline" size="sm">
+                        Test
+                      </Button>
+                      <Button variant="outline" size="sm">
+                        Edit
+                      </Button>
+                      <Button variant="destructive" size="sm">
+                        Delete
                       </Button>
                     </div>
                   </div>
-                </Card>
-              ))}
-            </div>
-          ) : (
-            <Card className="p-8 text-center">
-              <Shield className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-medium mb-2">No Broker Credentials</h3>
-              <p className="text-muted-foreground mb-4">
-                Add your broker credentials to enable automated trading
-              </p>
-              {mode === "both" && (
-                <Button onClick={() => setIsCreateDialogOpen(true)}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add First Credentials
-                </Button>
-              )}
-            </Card>
-          )}
-        </div>
-      )}
-
-      {/* Create Only Mode */}
-      {mode === "create" && (
-        <Card className="p-6">
-          <h3 className="text-lg font-semibold mb-4">Add Broker Credentials</h3>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(handleCreateCredential)} className="space-y-4">
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Credential Name</FormLabel>
-                    <FormControl>
-                      <Input placeholder="My Trading Account" {...field} />
-                    </FormControl>
-                    <FormDescription>
-                      A friendly name to identify this broker connection
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="broker"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Broker</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a broker" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="capital.com">Capital.com</SelectItem>
-                        <SelectItem value="binance">Binance</SelectItem>
-                        <SelectItem value="coinbase">Coinbase</SelectItem>
-                        <SelectItem value="other">Other</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="credentials.apiKey"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>API Key</FormLabel>
-                    <FormControl>
-                      <Input type="password" placeholder="Enter API Key" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="credentials.identifier"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Identifier</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Enter Identifier" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="credentials.password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Password</FormLabel>
-                    <FormControl>
-                      <Input type="password" placeholder="Enter Password" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="isDemo"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                    <div className="space-y-0.5">
-                      <FormLabel>Demo Account</FormLabel>
-                      <FormDescription>Enable demo mode for testing purposes</FormDescription>
-                    </div>
-                    <FormControl>
-                      <Switch checked={field.value} onCheckedChange={field.onChange} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-
-              <Button type="submit" disabled={createCredential.isLoading} className="w-full">
-                {createCredential.isLoading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Creating Credentials...
-                  </>
-                ) : (
-                  <>
-                    <Shield className="h-4 w-4 mr-2" />
-                    Create Credentials
-                  </>
-                )}
-              </Button>
-            </form>
-          </Form>
+                ))}
+              </div>
+            )}
+          </CardContent>
         </Card>
-      )}
+      ) : null}
     </div>
   );
 }

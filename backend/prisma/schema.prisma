@@ -112,6 +112,32 @@ model Strategy {
   @@map("strategies")
 }
 
+model StrategyTemplate {
+  id                  String   @id @default(cuid())
+  name                String   @db.VarChar(100)
+  category            String   @db.VarChar(50)
+  description         String
+  shortDescription    String   @map("short_description") @db.VarChar(255)
+  indicators          Json     @map("indicators")
+  timeframes          Json     @map("timeframes")
+  entryConditions     Json     @map("entry_conditions")
+  exitConditions      Json     @map("exit_conditions")
+  riskManagement      Json     @map("risk_management")
+  minRiskPerTrade     Int      @default(50) @map("min_risk_per_trade")
+  maxRiskPerTrade     Int      @default(200) @map("max_risk_per_trade")
+  confidenceThreshold Int      @default(70) @map("confidence_threshold")
+  winRateExpected     Int?     @map("win_rate_expected")
+  riskRewardRatio     Float?   @map("risk_reward_ratio")
+  complexity          String   @default("intermediate") @map("complexity")
+  marketCondition     String   @default("any") @map("market_condition")
+  isActive            Boolean  @default(true) @map("is_active")
+  usageCount          Int      @default(0) @map("usage_count")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @default(now()) @map("updated_at")
+
+  @@map("strategy_templates")
+}
+
 model Trade {
   id            String      @id @default(cuid())
   userId        String
