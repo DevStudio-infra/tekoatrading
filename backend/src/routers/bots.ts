@@ -5,6 +5,7 @@ import { botEvaluationService } from "../services/bot-evaluation.service";
 import { brokerIntegrationService } from "../services/broker-integration.service";
 import { logger } from "../logger";
 import { credentialsEncryption } from "../services/credentials-encryption.service";
+import { schedulerService } from "../services/scheduler.service";
 
 // Enhanced validation schemas
 const createBotSchema = z
@@ -259,6 +260,13 @@ export const botsRouter = router({
       });
 
       logger.info(`Created new bot: ${bot.id} (${bot.name}) for user: ${ctx.user.id}`);
+
+      // Notify scheduler if bot is active and AI trading is enabled
+      if (bot.isActive && bot.isAiTradingActive) {
+        schedulerService.onBotCreated(bot.id, bot.timeframe);
+        logger.info(`Bot ${bot.id} added to scheduler with timeframe ${bot.timeframe}`);
+      }
+
       return bot;
     } catch (error) {
       logger.error("Error creating bot:", error);
@@ -297,6 +305,16 @@ export const botsRouter = router({
       });
 
       logger.info(`Updated bot: ${bot.id} (${bot.name})`);
+
+      // Update scheduler if timeframe or status changed
+      if (bot.isActive && bot.isAiTradingActive) {
+        schedulerService.updateBotSchedule(bot.id, bot.timeframe);
+        logger.info(`Bot ${bot.id} schedule updated in scheduler`);
+      } else {
+        schedulerService.removeBot(bot.id);
+        logger.info(`Bot ${bot.id} removed from scheduler (inactive or AI trading disabled)`);
+      }
+
       return bot;
     } catch (error) {
       logger.error("Error updating bot:", error);
@@ -315,6 +333,10 @@ export const botsRouter = router({
             userId: ctx.user.id, // Ensure the bot belongs to the user
           },
         });
+
+        // Remove bot from scheduler
+        schedulerService.removeBot(input.id);
+        logger.info(`Bot ${input.id} removed from scheduler after deletion`);
 
         return { success: true };
       } catch (error) {
@@ -337,6 +359,15 @@ export const botsRouter = router({
             isActive: input.isActive,
           },
         });
+
+        // Update scheduler based on new active status
+        if (bot.isActive && bot.isAiTradingActive) {
+          schedulerService.onBotCreated(bot.id, bot.timeframe);
+          logger.info(`Bot ${bot.id} added to scheduler (activated)`);
+        } else {
+          schedulerService.removeBot(bot.id);
+          logger.info(`Bot ${bot.id} removed from scheduler (deactivated)`);
+        }
 
         return bot;
       } catch (error) {
@@ -364,6 +395,16 @@ export const botsRouter = router({
         });
 
         logger.info(`Toggled bot ${input.id} AI trading status to ${updatedBot.isAiTradingActive}`);
+
+        // Update scheduler based on new AI trading status
+        if (updatedBot.isActive && updatedBot.isAiTradingActive) {
+          schedulerService.onBotCreated(updatedBot.id, updatedBot.timeframe);
+          logger.info(`Bot ${updatedBot.id} added to scheduler (AI trading enabled)`);
+        } else {
+          schedulerService.removeBot(updatedBot.id);
+          logger.info(`Bot ${updatedBot.id} removed from scheduler (AI trading disabled)`);
+        }
+
         return updatedBot;
       } catch (error) {
         logger.error("Error toggling AI trading status:", error);

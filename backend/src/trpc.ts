@@ -89,8 +89,6 @@ export const createContext = async ({ req }: CreateExpressContextOptions) => {
 
   // Development mode: inject dummy user if no authentication and in development
   if (!user && process.env.NODE_ENV === "development") {
-    console.log("Development mode: No user found, creating development user");
-
     // Try to find or create a development user
     let devUser = await prisma.user.findFirst({
       where: { email: "dev@example.com" },
@@ -105,7 +103,7 @@ export const createContext = async ({ req }: CreateExpressContextOptions) => {
             name: "Development User",
           },
         });
-        console.log("Created development user:", devUser.id);
+        logger.info("Created development user for local development");
       } catch (createError) {
         // User might already exist, try to find again
         devUser = await prisma.user.findFirst({
@@ -123,7 +121,6 @@ export const createContext = async ({ req }: CreateExpressContextOptions) => {
         createdAt: devUser.createdAt,
         updatedAt: devUser.updatedAt,
       };
-      console.log("Using development user:", user.id);
     }
   }
 
