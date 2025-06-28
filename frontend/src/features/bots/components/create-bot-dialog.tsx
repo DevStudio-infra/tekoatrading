@@ -50,10 +50,9 @@ interface CreateBotDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
-  userId: string;
 }
 
-export function CreateBotDialog({ open, onOpenChange, onSuccess, userId }: CreateBotDialogProps) {
+export function CreateBotDialog({ open, onOpenChange, onSuccess }: CreateBotDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedTradingPair, setSelectedTradingPair] = useState<TradingPair | null>(null);
 
@@ -86,7 +85,6 @@ export function CreateBotDialog({ open, onOpenChange, onSuccess, userId }: Creat
     try {
       // Call the actual API to create bot
       const result = await createBotMutation.mutateAsync({
-        userId,
         name: data.name,
         description: data.description,
         tradingPairSymbol: data.tradingPairSymbol,

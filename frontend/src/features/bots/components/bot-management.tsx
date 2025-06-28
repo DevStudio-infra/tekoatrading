@@ -205,7 +205,6 @@ export function BotManagement() {
         open={isCreateDialogOpen}
         onOpenChange={setIsCreateDialogOpen}
         onSuccess={handleBotCreated}
-        userId={user?.id || "user_2x7ZBVN7sYTSc1moT7b4QSDP8J9"}
       />
 
       {/* Filter Tabs */}

@@ -229,11 +229,11 @@ export const botsRouter = router({
     }),
 
   // Create a new bot
-  create: publicProcedure.input(createBotWithUserSchema).mutation(async ({ input }) => {
+  create: protectedProcedure.input(createBotSchema).mutation(async ({ input, ctx }) => {
     try {
       const bot = await prisma.bot.create({
         data: {
-          userId: input.userId,
+          userId: ctx.user.id,
           name: input.name,
           description: input.description,
           tradingPairSymbol: input.tradingPairSymbol,
@@ -258,7 +258,7 @@ export const botsRouter = router({
         },
       });
 
-      logger.info(`Created new bot: ${bot.id} (${bot.name})`);
+      logger.info(`Created new bot: ${bot.id} (${bot.name}) for user: ${ctx.user.id}`);
       return bot;
     } catch (error) {
       logger.error("Error creating bot:", error);
