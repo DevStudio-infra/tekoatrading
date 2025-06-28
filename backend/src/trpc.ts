@@ -36,36 +36,101 @@ export const createContext = async ({ req }: CreateExpressContextOptions) => {
         }
       }
 
-      if (decoded && decoded.sub) {
-        // Find user by Clerk ID
-        user = await prisma.user.findUnique({
+      if (decoded) {
+        // Check if user exists in our database
+        const existingUser = await prisma.user.findUnique({
           where: { clerkId: decoded.sub },
         });
 
-        // If user doesn't exist but we have a valid Clerk token, create the user
-        if (!user && decoded.sub) {
+        if (existingUser) {
+          user = {
+            id: existingUser.id,
+            clerkId: existingUser.clerkId,
+            email: existingUser.email,
+            name: existingUser.name,
+            createdAt: existingUser.createdAt,
+            updatedAt: existingUser.updatedAt,
+          };
+        } else {
+          // Create user from token if they don't exist
           try {
-            user = await prisma.user.create({
+            const newUser = await prisma.user.create({
               data: {
                 clerkId: decoded.sub,
-                email: decoded.email || `${decoded.sub}@temp.com`, // Use temp email if not available
-                name: decoded.name || decoded.first_name || decoded.last_name || "Unknown User",
+                email: decoded.email || `${decoded.sub}@clerk.dev`,
+                name:
+                  decoded.name ||
+                  `${decoded.given_name || decoded.first_name || ""} ${
+                    decoded.family_name || decoded.last_name || ""
+                  }`.trim() ||
+                  "Unknown User",
               },
             });
+
+            user = {
+              id: newUser.id,
+              clerkId: newUser.clerkId,
+              email: newUser.email,
+              name: newUser.name,
+              createdAt: newUser.createdAt,
+              updatedAt: newUser.updatedAt,
+            };
+
+            logger.info(`Auto-created user from token: ${newUser.id} (${newUser.clerkId})`);
           } catch (createError) {
-            logger.error("Failed to auto-create user:", createError);
+            logger.error("Failed to create user from token:", createError);
           }
         }
       }
     } catch (error) {
-      logger.error("Failed to process token:", error);
+      logger.warn("Failed to decode token:", error);
+    }
+  }
+
+  // Development mode: inject dummy user if no authentication and in development
+  if (!user && process.env.NODE_ENV === "development") {
+    console.log("Development mode: No user found, creating development user");
+
+    // Try to find or create a development user
+    let devUser = await prisma.user.findFirst({
+      where: { email: "dev@example.com" },
+    });
+
+    if (!devUser) {
+      try {
+        devUser = await prisma.user.create({
+          data: {
+            clerkId: "dev-user-id",
+            email: "dev@example.com",
+            name: "Development User",
+          },
+        });
+        console.log("Created development user:", devUser.id);
+      } catch (createError) {
+        // User might already exist, try to find again
+        devUser = await prisma.user.findFirst({
+          where: { clerkId: "dev-user-id" },
+        });
+      }
+    }
+
+    if (devUser) {
+      user = {
+        id: devUser.id,
+        clerkId: devUser.clerkId,
+        email: devUser.email,
+        name: devUser.name,
+        createdAt: devUser.createdAt,
+        updatedAt: devUser.updatedAt,
+      };
+      console.log("Using development user:", user.id);
     }
   }
 
   return {
-    prisma,
-    logger,
+    req,
     user,
+    prisma,
   };
 };
 

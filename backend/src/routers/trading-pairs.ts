@@ -8,10 +8,12 @@ export const tradingPairsRouter = router({
         brokerName: z.string().optional(),
         category: z.string().optional(),
         isActive: z.boolean().optional(),
-        limit: z.number().optional().default(100),
+        limit: z.number().optional().default(5000),
       }),
     )
     .query(async ({ ctx, input }) => {
+      console.log("Trading pairs getAll called with input:", input);
+
       const where: any = {};
 
       if (input.brokerName) {
@@ -26,11 +28,16 @@ export const tradingPairsRouter = router({
         where.isActive = input.isActive;
       }
 
-      return await ctx.prisma.tradingPair.findMany({
+      console.log("Querying trading pairs with where clause:", where);
+
+      const result = await ctx.prisma.tradingPair.findMany({
         where,
         take: input.limit,
         orderBy: { symbol: "asc" },
       });
+
+      console.log("Found trading pairs:", result.length);
+      return result;
     }),
 
   search: publicProcedure
@@ -70,6 +77,8 @@ export const tradingPairsRouter = router({
       }),
     )
     .query(async ({ ctx, input }) => {
+      console.log("Trading pairs getPopular called with input:", input);
+
       const where: any = { isActive: true };
 
       if (input.brokerName) {
@@ -94,21 +103,29 @@ export const tradingPairsRouter = router({
         .map((item) => item.tradingPairSymbol)
         .filter(Boolean) as string[];
 
+      console.log("Popular symbols from bots:", symbols);
+
       if (symbols.length === 0) {
         // Fallback to some default popular pairs
-        return await ctx.prisma.tradingPair.findMany({
+        console.log("No popular symbols found, using fallback");
+        const fallbackResult = await ctx.prisma.tradingPair.findMany({
           where,
           take: input.limit,
           orderBy: { symbol: "asc" },
         });
+        console.log("Fallback trading pairs found:", fallbackResult.length);
+        return fallbackResult;
       }
 
-      return await ctx.prisma.tradingPair.findMany({
+      const result = await ctx.prisma.tradingPair.findMany({
         where: {
           ...where,
           symbol: { in: symbols },
         },
       });
+
+      console.log("Popular trading pairs found:", result.length);
+      return result;
     }),
 
   getCategories: publicProcedure.query(async ({ ctx }) => {

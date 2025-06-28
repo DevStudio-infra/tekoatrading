@@ -10,12 +10,18 @@ interface ProvidersProps {
 }
 
 function TRPCProviderWithAuth({ children }: { children: ReactNode }) {
-  const { getToken } = useAuth();
+  const { getToken, isSignedIn } = useAuth();
   const [queryClient] = useState(() => new QueryClient());
 
   const trpcClient = useMemo(() => {
+    // In development mode, allow access without authentication
+    if (process.env.NODE_ENV === "development" && !isSignedIn) {
+      console.log("Development mode: Creating TRPC client without authentication");
+      return createTRPCClient();
+    }
+
     return createTRPCClient(getToken);
-  }, [getToken]);
+  }, [getToken, isSignedIn]);
 
   return (
     <trpc.Provider client={trpcClient} queryClient={queryClient}>
