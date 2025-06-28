@@ -7,17 +7,43 @@ import { logger } from "../logger";
 import { credentialsEncryption } from "../services/credentials-encryption.service";
 
 // Enhanced validation schemas
-const createBotSchema = z.object({
-  name: z.string().min(1).max(100),
-  description: z.string().optional(),
-  tradingPairSymbol: z.string().min(1),
-  timeframe: z.enum(["M1", "M5", "M15", "M30", "H1", "H4", "D1"]).default("M1"),
-  maxPositionSize: z.number().positive().default(100),
-  riskPercentage: z.number().min(0.1).max(10).default(2),
-  strategyId: z.string().optional(),
-  brokerCredentialId: z.string().optional(),
-  isAiTradingActive: z.boolean().default(false),
-});
+const createBotSchema = z
+  .object({
+    name: z.string().min(1).max(100),
+    description: z.string().optional(),
+    tradingPairSymbol: z.string().min(1),
+    timeframe: z.enum(["M1", "M5", "M15", "M30", "H1", "H4", "D1"]).default("M1"),
+    maxOpenTrades: z.number().min(1).max(10).default(5),
+    minRiskPercentage: z.number().min(0.1).max(10).default(0.5),
+    maxRiskPercentage: z.number().min(0.1).max(10).default(5),
+    strategyId: z.string().optional(),
+    brokerCredentialId: z.string().optional(),
+    isAiTradingActive: z.boolean().default(false),
+  })
+  .refine((data) => data.maxRiskPercentage > data.minRiskPercentage, {
+    message: "Max risk percentage must be greater than min risk percentage",
+    path: ["maxRiskPercentage"],
+  });
+
+// Separate schema for create with userId
+const createBotWithUserSchema = z
+  .object({
+    userId: z.string(),
+    name: z.string().min(1).max(100),
+    description: z.string().optional(),
+    tradingPairSymbol: z.string().min(1),
+    timeframe: z.enum(["M1", "M5", "M15", "M30", "H1", "H4", "D1"]).default("M1"),
+    maxOpenTrades: z.number().min(1).max(10).default(5),
+    minRiskPercentage: z.number().min(0.1).max(10).default(0.5),
+    maxRiskPercentage: z.number().min(0.1).max(10).default(5),
+    strategyId: z.string().optional(),
+    brokerCredentialId: z.string().optional(),
+    isAiTradingActive: z.boolean().default(false),
+  })
+  .refine((data) => data.maxRiskPercentage > data.minRiskPercentage, {
+    message: "Max risk percentage must be greater than min risk percentage",
+    path: ["maxRiskPercentage"],
+  });
 
 const updateBotSchema = z.object({
   id: z.string(),
@@ -25,8 +51,9 @@ const updateBotSchema = z.object({
   description: z.string().optional(),
   tradingPairSymbol: z.string().min(1).optional(),
   timeframe: z.enum(["M1", "M5", "M15", "M30", "H1", "H4", "D1"]).optional(),
-  maxPositionSize: z.number().positive().optional(),
-  riskPercentage: z.number().min(0.1).max(10).optional(),
+  maxOpenTrades: z.number().min(1).max(10).optional(),
+  minRiskPercentage: z.number().min(0.1).max(10).optional(),
+  maxRiskPercentage: z.number().min(0.1).max(10).optional(),
   isActive: z.boolean().optional(),
   isAiTradingActive: z.boolean().optional(),
   strategyId: z.string().optional(),
@@ -202,43 +229,42 @@ export const botsRouter = router({
     }),
 
   // Create a new bot
-  create: publicProcedure
-    .input(createBotSchema.extend({ userId: z.string() }))
-    .mutation(async ({ input }) => {
-      try {
-        const bot = await prisma.bot.create({
-          data: {
-            userId: input.userId,
-            name: input.name,
-            description: input.description,
-            tradingPairSymbol: input.tradingPairSymbol,
-            timeframe: input.timeframe,
-            maxPositionSize: input.maxPositionSize,
-            riskPercentage: input.riskPercentage,
-            strategyId: input.strategyId,
-            brokerCredentialId: input.brokerCredentialId,
-            isAiTradingActive: input.isAiTradingActive,
-          },
-          include: {
-            strategy: true,
-            brokerCredential: {
-              select: {
-                id: true,
-                name: true,
-                broker: true,
-                isDemo: true,
-              },
+  create: publicProcedure.input(createBotWithUserSchema).mutation(async ({ input }) => {
+    try {
+      const bot = await prisma.bot.create({
+        data: {
+          userId: input.userId,
+          name: input.name,
+          description: input.description,
+          tradingPairSymbol: input.tradingPairSymbol,
+          timeframe: input.timeframe,
+          maxOpenTrades: input.maxOpenTrades,
+          minRiskPercentage: input.minRiskPercentage,
+          maxRiskPercentage: input.maxRiskPercentage,
+          strategyId: input.strategyId,
+          brokerCredentialId: input.brokerCredentialId,
+          isAiTradingActive: input.isAiTradingActive,
+        },
+        include: {
+          strategy: true,
+          brokerCredential: {
+            select: {
+              id: true,
+              name: true,
+              broker: true,
+              isDemo: true,
             },
           },
-        });
+        },
+      });
 
-        logger.info(`Created new bot: ${bot.id} (${bot.name})`);
-        return bot;
-      } catch (error) {
-        logger.error("Error creating bot:", error);
-        throw new Error("Failed to create bot");
-      }
-    }),
+      logger.info(`Created new bot: ${bot.id} (${bot.name})`);
+      return bot;
+    } catch (error) {
+      logger.error("Error creating bot:", error);
+      throw new Error("Failed to create bot");
+    }
+  }),
 
   // Update a bot
   update: protectedProcedure.input(updateBotSchema).mutation(async ({ input, ctx }) => {

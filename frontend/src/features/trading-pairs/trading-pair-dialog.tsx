@@ -469,7 +469,7 @@ export function TradingPairDialog({
         </ScrollArea>
 
         {/* Results list */}
-        <ScrollArea className="flex-1">
+        <div className="flex-1 overflow-hidden">
           {isLoading && results.length === 0 ? (
             <div className="py-8 text-center text-muted-foreground text-sm">
               <div className="animate-pulse">Loading...</div>
@@ -500,65 +500,83 @@ export function TradingPairDialog({
           ) : (
             <div
               ref={scrollContainerRef}
-              className="py-1 flex-1 overflow-y-auto"
+              className="h-full overflow-y-auto"
               onScroll={(e) => {
                 const target = e.currentTarget;
+                const scrollTop = target.scrollTop;
+                const scrollHeight = target.scrollHeight;
+                const clientHeight = target.clientHeight;
+                const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
 
-                // Simple scroll detection for infinite loading
-                if (
-                  target.scrollHeight - target.scrollTop - target.clientHeight < 50 &&
-                  displayLimit < filteredResults.length
-                ) {
-                  setDisplayLimit((prevLimit) => Math.min(prevLimit + 30, filteredResults.length));
+                console.log("Scroll Debug:", {
+                  scrollTop,
+                  scrollHeight,
+                  clientHeight,
+                  distanceFromBottom,
+                  displayLimit,
+                  filteredResultsLength: filteredResults.length,
+                  shouldLoadMore: distanceFromBottom < 100 && displayLimit < filteredResults.length,
+                });
+
+                // Load more when near bottom
+                if (distanceFromBottom < 100 && displayLimit < filteredResults.length) {
+                  console.log("Loading more items...");
+                  setDisplayLimit((prevLimit) => {
+                    const newLimit = Math.min(prevLimit + 30, filteredResults.length);
+                    console.log(`Display limit updated from ${prevLimit} to ${newLimit}`);
+                    return newLimit;
+                  });
                 }
               }}
             >
-              {displayResults.map((pair, index) => {
-                const exchange = getExchange(pair);
-                const assetType = getAssetTypeLabel(pair.type, pair.category);
-                const displayInfo = getDisplayInfo(pair);
+              <div className="py-1">
+                {displayResults.map((pair, index) => {
+                  const exchange = getExchange(pair);
+                  const assetType = getAssetTypeLabel(pair.type, pair.category);
+                  const displayInfo = getDisplayInfo(pair);
 
-                return (
-                  <button
-                    key={`${pair.id}-${pair.symbol}-${index}`}
-                    className="w-full text-left px-4 py-3 hover:bg-muted/50 flex items-center justify-between group border-b border-gray-800/10 dark:border-gray-200/10"
-                    onClick={() => handleSelectSymbol(pair)}
-                  >
-                    <div className="flex items-center gap-3">
-                      <ExchangeFlag exchange={exchange} />
-                      <div className="flex items-center gap-2">
-                        {getCategoryIcon(pair.category)}
-                        <div className="min-w-0 flex-1">
-                          <div className="font-medium text-foreground group-hover:text-primary">
-                            {displayInfo.primary}
-                          </div>
-                          {displayInfo.secondary && (
-                            <div className="text-xs text-muted-foreground truncate max-w-[250px]">
-                              {displayInfo.secondary}
+                  return (
+                    <button
+                      key={`${pair.id}-${pair.symbol}-${index}`}
+                      className="w-full text-left px-4 py-3 hover:bg-muted/50 flex items-center justify-between group border-b border-gray-800/10 dark:border-gray-200/10"
+                      onClick={() => handleSelectSymbol(pair)}
+                    >
+                      <div className="flex items-center gap-3">
+                        <ExchangeFlag exchange={exchange} />
+                        <div className="flex items-center gap-2">
+                          {getCategoryIcon(pair.category)}
+                          <div className="min-w-0 flex-1">
+                            <div className="font-medium text-foreground group-hover:text-primary">
+                              {displayInfo.primary}
                             </div>
-                          )}
+                            {displayInfo.secondary && (
+                              <div className="text-xs text-muted-foreground truncate max-w-[250px]">
+                                {displayInfo.secondary}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground">{assetType}</span>
-                      <Badge variant="outline" className="text-xs">
-                        {exchange}
-                      </Badge>
-                      {displayInfo.showSymbolBadge && displayInfo.secondary && (
-                        <Badge variant="secondary" className="text-xs font-mono">
-                          {displayInfo.secondary}
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">{assetType}</span>
+                        <Badge variant="outline" className="text-xs">
+                          {exchange}
                         </Badge>
-                      )}
-                      <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </div>
-                  </button>
-                );
-              })}
+                        {displayInfo.showSymbolBadge && displayInfo.secondary && (
+                          <Badge variant="secondary" className="text-xs font-mono">
+                            {displayInfo.secondary}
+                          </Badge>
+                        )}
+                        <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
-        </ScrollArea>
+        </div>
 
         <div className="border-t px-4 py-2 text-xs text-muted-foreground">
           {filteredResults.length > 0 &&

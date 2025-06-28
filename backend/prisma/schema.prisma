@@ -72,8 +72,9 @@ model Bot {
   timeframe          String            @default("M1")
   isActive           Boolean           @default(true)
   isAiTradingActive  Boolean           @default(false)
-  maxPositionSize    Float             @default(100)
-  riskPercentage     Float             @default(2)
+  maxOpenTrades      Int               @default(5)
+  minRiskPercentage  Float             @default(0.5)
+  maxRiskPercentage  Float             @default(5)
   strategyId         String?
   brokerCredentialId String?
   tradingPairId      Int?              @map("trading_pair_id")

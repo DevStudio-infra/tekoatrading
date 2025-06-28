@@ -25,18 +25,24 @@ import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { TradingPairSelect, type TradingPair } from "../../trading-pairs/trading-pair-select";
 
-const createBotSchema = z.object({
-  name: z
-    .string()
-    .min(1, "Bot name is required")
-    .max(100, "Bot name must be less than 100 characters"),
-  description: z.string().max(200, "Description must be less than 200 characters").optional(),
-  tradingPairSymbol: z.string().min(1, "Trading pair is required"),
-  timeframe: z.enum(["M1", "M5", "M15", "M30", "H1", "H4", "D1"]),
-  maxPositionSize: z.number().positive(),
-  riskPercentage: z.number().min(0.1).max(10),
-  isAiTradingActive: z.boolean(),
-});
+const createBotSchema = z
+  .object({
+    name: z
+      .string()
+      .min(1, "Bot name is required")
+      .max(100, "Bot name must be less than 100 characters"),
+    description: z.string().max(200, "Description must be less than 200 characters").optional(),
+    tradingPairSymbol: z.string().min(1, "Trading pair is required"),
+    timeframe: z.enum(["M1", "M5", "M15", "M30", "H1", "H4", "D1"]),
+    maxOpenTrades: z.number().min(1).max(10),
+    minRiskPercentage: z.number().min(0.1).max(10),
+    maxRiskPercentage: z.number().min(0.1).max(10),
+    isAiTradingActive: z.boolean(),
+  })
+  .refine((data) => data.maxRiskPercentage > data.minRiskPercentage, {
+    message: "Max risk must be greater than min risk",
+    path: ["maxRiskPercentage"],
+  });
 
 type CreateBotFormData = z.infer<typeof createBotSchema>;
 
@@ -68,8 +74,9 @@ export function CreateBotDialog({ open, onOpenChange, onSuccess, userId }: Creat
       description: "",
       tradingPairSymbol: "",
       timeframe: "M1",
-      maxPositionSize: 100,
-      riskPercentage: 2,
+      maxOpenTrades: 4,
+      minRiskPercentage: 0.5,
+      maxRiskPercentage: 2,
       isAiTradingActive: false,
     },
   });
@@ -84,8 +91,9 @@ export function CreateBotDialog({ open, onOpenChange, onSuccess, userId }: Creat
         description: data.description,
         tradingPairSymbol: data.tradingPairSymbol,
         timeframe: data.timeframe,
-        maxPositionSize: data.maxPositionSize,
-        riskPercentage: data.riskPercentage,
+        maxOpenTrades: data.maxOpenTrades,
+        minRiskPercentage: data.minRiskPercentage,
+        maxRiskPercentage: data.maxRiskPercentage,
         isAiTradingActive: data.isAiTradingActive,
       });
 
@@ -154,13 +162,14 @@ export function CreateBotDialog({ open, onOpenChange, onSuccess, userId }: Creat
                 setValue("tradingPairSymbol", pair.symbol);
               }}
               placeholder="Select trading pair..."
+              label={undefined}
             />
             {errors.tradingPairSymbol && (
               <p className="text-sm text-red-500">{errors.tradingPairSymbol.message}</p>
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label htmlFor="timeframe">Timeframe</Label>
               <Select defaultValue="M1" onValueChange={handleTimeframeChange}>
@@ -183,33 +192,50 @@ export function CreateBotDialog({ open, onOpenChange, onSuccess, userId }: Creat
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="riskPercentage">Risk % (0.1-10)</Label>
+              <Label htmlFor="minRiskPercentage">Min Risk % (0.1-10)</Label>
               <Input
-                id="riskPercentage"
+                id="minRiskPercentage"
+                type="number"
+                step="0.1"
+                min="0.1"
+                max="10"
+                placeholder="0.5"
+                {...register("minRiskPercentage", { valueAsNumber: true })}
+              />
+              {errors.minRiskPercentage && (
+                <p className="text-sm text-red-500">{errors.minRiskPercentage.message}</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="maxRiskPercentage">Max Risk % (0.1-10)</Label>
+              <Input
+                id="maxRiskPercentage"
                 type="number"
                 step="0.1"
                 min="0.1"
                 max="10"
                 placeholder="2"
-                {...register("riskPercentage", { valueAsNumber: true })}
+                {...register("maxRiskPercentage", { valueAsNumber: true })}
               />
-              {errors.riskPercentage && (
-                <p className="text-sm text-red-500">{errors.riskPercentage.message}</p>
+              {errors.maxRiskPercentage && (
+                <p className="text-sm text-red-500">{errors.maxRiskPercentage.message}</p>
               )}
             </div>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="maxPositionSize">Max Position Size</Label>
+            <Label htmlFor="maxOpenTrades">Max Open Trades (1-10)</Label>
             <Input
-              id="maxPositionSize"
+              id="maxOpenTrades"
               type="number"
               min="1"
-              placeholder="100"
-              {...register("maxPositionSize", { valueAsNumber: true })}
+              max="10"
+              placeholder="4"
+              {...register("maxOpenTrades", { valueAsNumber: true })}
             />
-            {errors.maxPositionSize && (
-              <p className="text-sm text-red-500">{errors.maxPositionSize.message}</p>
+            {errors.maxOpenTrades && (
+              <p className="text-sm text-red-500">{errors.maxOpenTrades.message}</p>
             )}
           </div>
 
