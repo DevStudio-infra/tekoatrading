@@ -1,3 +1,14 @@
 {
-  "/[locale]/(dashboard)/bots/page": "app/[locale]/(dashboard)/bots/page.js"
+  "/[locale]/(dashboard)/bots/page": "app/[locale]/(dashboard)/bots/page.js",
+  "/_not-found/page": "app/_not-found/page.js",
+  "/[locale]/(auth)/sign-in/[[...sign-in]]/page": "app/[locale]/(auth)/sign-in/[[...sign-in]]/page.js",
+  "/[locale]/(auth)/sign-up/[[...sign-up]]/page": "app/[locale]/(auth)/sign-up/[[...sign-up]]/page.js",
+  "/[locale]/page": "app/[locale]/page.js",
+  "/[locale]/(dashboard)/ai-assistant/page": "app/[locale]/(dashboard)/ai-assistant/page.js",
+  "/[locale]/(dashboard)/dashboard/page": "app/[locale]/(dashboard)/dashboard/page.js",
+  "/[locale]/(dashboard)/analytics/page": "app/[locale]/(dashboard)/analytics/page.js",
+  "/[locale]/(dashboard)/trading/page": "app/[locale]/(dashboard)/trading/page.js",
+  "/[locale]/(dashboard)/settings/page": "app/[locale]/(dashboard)/settings/page.js",
+  "/[locale]/(dashboard)/strategies/page": "app/[locale]/(dashboard)/strategies/page.js",
+  "/[locale]/(dashboard)/settings/broker-credentials/page": "app/[locale]/(dashboard)/settings/broker-credentials/page.js"
 }
