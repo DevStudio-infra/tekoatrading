@@ -1,1 +1,3 @@
 {
+  "/[locale]/(dashboard)/bots/page": "app/[locale]/(dashboard)/bots/page.js"
+}

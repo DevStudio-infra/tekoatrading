@@ -23,6 +23,7 @@ import {
 } from "../../shared/components/ui/select";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
+import { TradingPairSelect, type TradingPair } from "../../trading-pairs/trading-pair-select";
 
 const createBotSchema = z.object({
   name: z
@@ -31,10 +32,10 @@ const createBotSchema = z.object({
     .max(100, "Bot name must be less than 100 characters"),
   description: z.string().max(200, "Description must be less than 200 characters").optional(),
   tradingPairSymbol: z.string().min(1, "Trading pair is required"),
-  timeframe: z.enum(["M1", "M5", "M15", "M30", "H1", "H4", "D1"]).default("M1"),
-  maxPositionSize: z.number().positive().default(100),
-  riskPercentage: z.number().min(0.1).max(10).default(2),
-  isAiTradingActive: z.boolean().default(false),
+  timeframe: z.enum(["M1", "M5", "M15", "M30", "H1", "H4", "D1"]),
+  maxPositionSize: z.number().positive(),
+  riskPercentage: z.number().min(0.1).max(10),
+  isAiTradingActive: z.boolean(),
 });
 
 type CreateBotFormData = z.infer<typeof createBotSchema>;
@@ -48,6 +49,7 @@ interface CreateBotDialogProps {
 
 export function CreateBotDialog({ open, onOpenChange, onSuccess, userId }: CreateBotDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedTradingPair, setSelectedTradingPair] = useState<TradingPair | null>(null);
 
   // TRPC mutation for creating bot
   const createBotMutation = trpc.bots.create.useMutation();
@@ -89,6 +91,7 @@ export function CreateBotDialog({ open, onOpenChange, onSuccess, userId }: Creat
 
       toast.success(`Bot "${data.name}" created successfully!`);
       reset();
+      setSelectedTradingPair(null);
       onOpenChange(false);
       onSuccess();
     } catch (error) {
@@ -102,6 +105,7 @@ export function CreateBotDialog({ open, onOpenChange, onSuccess, userId }: Creat
 
   const handleClose = () => {
     reset();
+    setSelectedTradingPair(null);
     onOpenChange(false);
   };
 
@@ -143,10 +147,13 @@ export function CreateBotDialog({ open, onOpenChange, onSuccess, userId }: Creat
 
           <div className="space-y-2">
             <Label htmlFor="tradingPair">Trading Pair *</Label>
-            <Input
-              id="tradingPair"
-              placeholder="e.g., EUR/USD, BTC/USDT, GOLD/USD"
-              {...register("tradingPairSymbol")}
+            <TradingPairSelect
+              selectedSymbol={selectedTradingPair}
+              onSelectSymbol={(pair: TradingPair) => {
+                setSelectedTradingPair(pair);
+                setValue("tradingPairSymbol", pair.symbol);
+              }}
+              placeholder="Select trading pair..."
             />
             {errors.tradingPairSymbol && (
               <p className="text-sm text-red-500">{errors.tradingPairSymbol.message}</p>
@@ -209,19 +216,21 @@ export function CreateBotDialog({ open, onOpenChange, onSuccess, userId }: Creat
           <div className="flex items-center space-x-2">
             <input
               type="checkbox"
-              id="aiTrading"
-              className="rounded border-gray-300"
+              id="isAiTradingActive"
+              className="h-4 w-4"
               {...register("isAiTradingActive")}
             />
-            <Label htmlFor="aiTrading">Enable AI Trading (Experimental)</Label>
+            <Label htmlFor="isAiTradingActive" className="text-sm font-medium">
+              Enable AI Trading
+            </Label>
           </div>
 
           <div className="flex justify-end space-x-2 pt-4">
-            <Button type="button" variant="outline" onClick={handleClose} disabled={isSubmitting}>
+            <Button type="button" variant="outline" onClick={handleClose}>
               Cancel
             </Button>
             <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Creating Bot..." : "Create Bot"}
+              {isSubmitting ? "Creating..." : "Create Bot"}
             </Button>
           </div>
         </form>

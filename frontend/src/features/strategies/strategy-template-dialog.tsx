@@ -37,10 +37,10 @@ interface StrategyTemplate {
   category: string;
   description: string;
   shortDescription: string;
-  indicators: any[];
-  timeframes: string[];
-  entryConditions: string[];
-  exitConditions: string[];
+  indicators: string;
+  timeframes: string;
+  entryConditions: string;
+  exitConditions: string;
   riskManagement: any;
   minRiskPerTrade: number;
   maxRiskPerTrade: number;
@@ -79,6 +79,15 @@ const complexityColors = {
   advanced: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
 };
 
+// Helper function to safely parse JSON
+const safeParseJSON = (jsonString: string, fallback: any = []) => {
+  try {
+    return JSON.parse(jsonString);
+  } catch {
+    return fallback;
+  }
+};
+
 export function StrategyTemplateDialog({
   open,
   onOpenChange,
@@ -112,7 +121,8 @@ export function StrategyTemplateDialog({
 
   useEffect(() => {
     if (templatesByCategory) {
-      setTemplates(templatesByCategory);
+      // Type assertion to handle the mismatch
+      setTemplates(templatesByCategory as any);
     }
   }, [templatesByCategory]);
 
@@ -128,7 +138,9 @@ export function StrategyTemplateDialog({
 
     // Initialize indicator customizations with template values
     const initialIndicatorParams: Record<string, Record<string, any>> = {};
-    template.indicators?.forEach((indicator, index) => {
+    const indicators = safeParseJSON(template.indicators, []);
+
+    indicators.forEach((indicator: any, index: number) => {
       const key = `${indicator.type}_${index}`;
       initialIndicatorParams[key] = { ...indicator.params };
     });
@@ -178,14 +190,86 @@ export function StrategyTemplateDialog({
 
   const filteredTemplates = (category: keyof TemplatesByCategory) => {
     if (!searchQuery) return templates[category];
-    return templates[category].filter(
-      (template) =>
-        template.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        template.description.toLowerCase().includes(searchQuery.toLowerCase()),
+    return (
+      templates[category]?.filter(
+        (template) =>
+          template.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          template.description.toLowerCase().includes(searchQuery.toLowerCase()),
+      ) || []
     );
   };
 
   const formatRiskValue = (value: number) => `${(value / 100).toFixed(1)}%`;
+
+  // Helper component for rendering indicators
+  const IndicatorConfiguration = ({ template }: { template: StrategyTemplate }) => {
+    const indicators = safeParseJSON(template.indicators, []);
+
+    if (indicators.length === 0) {
+      return (
+        <div className="text-sm text-muted-foreground">
+          No indicators configured for this template.
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-3">
+        {indicators.map((indicator: any, index: number) => {
+          const key = `${indicator.type}_${index}`;
+          const currentParams = indicatorCustomizations[key] || indicator.params || {};
+
+          return (
+            <div key={`indicator-${index}`} className="p-3 border rounded-lg bg-muted/20">
+              <div className="font-medium mb-2">{indicator.type?.toUpperCase()}</div>
+              <div className="text-xs text-muted-foreground mb-3">
+                {indicator.description || `${indicator.type} indicator configuration`}
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                {Object.entries(currentParams).map(([param, value], paramIndex) => (
+                  <div key={`param-${index}-${paramIndex}`} className="space-y-1">
+                    <Label className="text-xs capitalize">{param.replace(/_/g, " ")}</Label>
+                    {param === "color" ? (
+                      <Input
+                        type="color"
+                        value={String(value)}
+                        onChange={(e) => {
+                          setIndicatorCustomizations((prev) => ({
+                            ...prev,
+                            [key]: { ...prev[key], [param]: e.target.value },
+                          }));
+                        }}
+                        className="h-7 w-full"
+                      />
+                    ) : (
+                      <Input
+                        type="number"
+                        value={String(value)}
+                        onChange={(e) => {
+                          const newValue =
+                            param.includes("af") || param.includes("std")
+                              ? parseFloat(e.target.value) || 0
+                              : parseInt(e.target.value) || 0;
+                          setIndicatorCustomizations((prev) => ({
+                            ...prev,
+                            [key]: { ...prev[key], [param]: newValue },
+                          }));
+                        }}
+                        step={param.includes("af") || param.includes("std") ? "0.01" : "1"}
+                        min={param.includes("period") ? "1" : undefined}
+                        className="h-7"
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -271,7 +355,7 @@ export function StrategyTemplateDialog({
                               <div className="space-y-2 text-sm">
                                 <div className="flex items-center gap-2">
                                   <ClockIcon className="h-4 w-4 text-muted-foreground" />
-                                  <span>{template.timeframes.join(", ")}</span>
+                                  <span>{safeParseJSON(template.timeframes, []).join(", ")}</span>
                                 </div>
                                 <div className="flex items-center gap-2">
                                   <TargetIcon className="h-4 w-4 text-muted-foreground" />
@@ -472,66 +556,7 @@ export function StrategyTemplateDialog({
                   {/* Indicators */}
                   <div className="space-y-4">
                     <h4 className="font-semibold">Configure Indicators</h4>
-                    <div className="space-y-3">
-                      {selectedTemplate.indicators?.map((indicator, index) => {
-                        const key = `${indicator.type}_${index}`;
-                        const currentParams =
-                          indicatorCustomizations[key] || indicator.params || {};
-
-                        return (
-                          <div key={index} className="p-3 border rounded-lg bg-muted/20">
-                            <div className="font-medium mb-2">{indicator.type?.toUpperCase()}</div>
-                            <div className="text-xs text-muted-foreground mb-3">
-                              {indicator.description}
-                            </div>
-
-                            {/* Parameter inputs */}
-                            <div className="grid grid-cols-2 gap-2">
-                              {Object.entries(currentParams).map(([param, value]) => (
-                                <div key={param} className="space-y-1">
-                                  <Label className="text-xs capitalize">
-                                    {param.replace(/_/g, " ")}
-                                  </Label>
-                                  {param === "color" ? (
-                                    <Input
-                                      type="color"
-                                      value={value as string}
-                                      onChange={(e) => {
-                                        setIndicatorCustomizations((prev) => ({
-                                          ...prev,
-                                          [key]: { ...prev[key], [param]: e.target.value },
-                                        }));
-                                      }}
-                                      className="h-7 w-full"
-                                    />
-                                  ) : (
-                                    <Input
-                                      type="number"
-                                      value={value as string | number}
-                                      onChange={(e) => {
-                                        const newValue =
-                                          param.includes("af") || param.includes("std")
-                                            ? parseFloat(e.target.value) || e.target.value
-                                            : parseInt(e.target.value) || e.target.value;
-                                        setIndicatorCustomizations((prev) => ({
-                                          ...prev,
-                                          [key]: { ...prev[key], [param]: newValue },
-                                        }));
-                                      }}
-                                      step={
-                                        param.includes("af") || param.includes("std") ? "0.01" : "1"
-                                      }
-                                      min={param.includes("period") ? "1" : undefined}
-                                      className="h-7"
-                                    />
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                    {React.createElement(IndicatorConfiguration, { template: selectedTemplate })}
                   </div>
                 </div>
               </div>
