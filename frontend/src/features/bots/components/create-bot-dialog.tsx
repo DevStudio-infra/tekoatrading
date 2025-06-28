@@ -154,7 +154,6 @@ export function CreateBotDialog({ open, onOpenChange, onSuccess, userId }: Creat
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="tradingPair">Trading Pair *</Label>
             <TradingPairSelect
               selectedSymbol={selectedTradingPair}
               onSelectSymbol={(pair: TradingPair) => {
@@ -162,7 +161,7 @@ export function CreateBotDialog({ open, onOpenChange, onSuccess, userId }: Creat
                 setValue("tradingPairSymbol", pair.symbol);
               }}
               placeholder="Select trading pair..."
-              label={undefined}
+              label="Trading Pair *"
             />
             {errors.tradingPairSymbol && (
               <p className="text-sm text-red-500">{errors.tradingPairSymbol.message}</p>
