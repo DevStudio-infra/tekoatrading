@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -21,26 +21,27 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../../shared/components/ui/select";
+import { Checkbox } from "../../shared/components/ui/checkbox";
 import { toast } from "sonner";
-import { trpc } from "@/lib/trpc";
-import { TradingPairSelect, type TradingPair } from "../../trading-pairs/trading-pair-select";
+import { trpc } from "../../../lib/trpc";
+import { TradingPairSelect, TradingPair } from "../../trading-pairs/trading-pair-select";
+import { Shield, AlertCircle } from "lucide-react";
+import { Alert, AlertDescription } from "../../shared/components/ui/alert";
 
 const createBotSchema = z
   .object({
-    name: z
-      .string()
-      .min(1, "Bot name is required")
-      .max(100, "Bot name must be less than 100 characters"),
-    description: z.string().max(200, "Description must be less than 200 characters").optional(),
+    name: z.string().min(1, "Bot name is required"),
+    description: z.string().optional(),
     tradingPairSymbol: z.string().min(1, "Trading pair is required"),
-    timeframe: z.enum(["M1", "M5", "M15", "M30", "H1", "H4", "D1"]),
-    maxOpenTrades: z.number().min(1).max(10),
-    minRiskPercentage: z.number().min(0.1).max(10),
-    maxRiskPercentage: z.number().min(0.1).max(10),
-    isAiTradingActive: z.boolean(),
+    timeframe: z.enum(["M1", "M5", "M15", "M30", "H1", "H4", "D1"]).default("M1"),
+    maxOpenTrades: z.number().min(1).max(10).default(4),
+    minRiskPercentage: z.number().min(0.1).max(10).default(0.5),
+    maxRiskPercentage: z.number().min(0.1).max(10).default(2),
+    brokerCredentialId: z.string().min(1, "Broker credential is required"),
+    isAiTradingActive: z.boolean().default(false),
   })
   .refine((data) => data.maxRiskPercentage > data.minRiskPercentage, {
-    message: "Max risk must be greater than min risk",
+    message: "Max risk percentage must be greater than min risk percentage",
     path: ["maxRiskPercentage"],
   });
 
@@ -56,8 +57,10 @@ export function CreateBotDialog({ open, onOpenChange, onSuccess }: CreateBotDial
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedTradingPair, setSelectedTradingPair] = useState<TradingPair | null>(null);
 
-  // TRPC mutation for creating bot
+  // TRPC mutations and queries
   const createBotMutation = trpc.bots.create.useMutation();
+  const { data: brokerCredentials = [], isLoading: isLoadingCredentials } =
+    trpc.bots.getBrokerCredentials.useQuery();
 
   const {
     register,
@@ -76,6 +79,7 @@ export function CreateBotDialog({ open, onOpenChange, onSuccess }: CreateBotDial
       maxOpenTrades: 4,
       minRiskPercentage: 0.5,
       maxRiskPercentage: 2,
+      brokerCredentialId: "",
       isAiTradingActive: false,
     },
   });
@@ -92,6 +96,7 @@ export function CreateBotDialog({ open, onOpenChange, onSuccess }: CreateBotDial
         maxOpenTrades: data.maxOpenTrades,
         minRiskPercentage: data.minRiskPercentage,
         maxRiskPercentage: data.maxRiskPercentage,
+        brokerCredentialId: data.brokerCredentialId,
         isAiTradingActive: data.isAiTradingActive,
       });
 
@@ -118,6 +123,9 @@ export function CreateBotDialog({ open, onOpenChange, onSuccess }: CreateBotDial
   const handleTimeframeChange = (value: string) => {
     setValue("timeframe", value as any);
   };
+
+  // Check if form can be submitted
+  const canSubmit = brokerCredentials.length > 0 && !isSubmitting;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -236,6 +244,50 @@ export function CreateBotDialog({ open, onOpenChange, onSuccess }: CreateBotDial
             )}
           </div>
 
+          <div className="space-y-2">
+            <Label htmlFor="brokerCredentialId">Broker Credential *</Label>
+            {isLoadingCredentials ? (
+              <div className="h-10 bg-muted animate-pulse rounded-md"></div>
+            ) : brokerCredentials.length > 0 ? (
+              <Select onValueChange={(value) => setValue("brokerCredentialId", value)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select broker credential..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {brokerCredentials.map((credential) => (
+                    <SelectItem key={credential.id} value={credential.id}>
+                      <div className="flex items-center gap-2">
+                        <Shield className="h-4 w-4" />
+                        <span>{credential.name}</span>
+                        <span className="text-xs text-muted-foreground">
+                          ({credential.broker} - {credential.isDemo ? "Demo" : "Live"})
+                        </span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <div className="space-y-2">
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    No broker credentials found. You need to add broker credentials before creating
+                    a bot.
+                    <Button asChild variant="link" className="p-0 h-auto ml-1">
+                      <a href="/settings/broker-credentials" target="_blank">
+                        Add credentials here
+                      </a>
+                    </Button>
+                  </AlertDescription>
+                </Alert>
+              </div>
+            )}
+            {errors.brokerCredentialId && (
+              <p className="text-sm text-red-500">{errors.brokerCredentialId.message}</p>
+            )}
+          </div>
+
           <div className="flex items-center space-x-2">
             <input
               type="checkbox"
@@ -252,7 +304,7 @@ export function CreateBotDialog({ open, onOpenChange, onSuccess }: CreateBotDial
             <Button type="button" variant="outline" onClick={handleClose}>
               Cancel
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
+            <Button type="submit" disabled={!canSubmit}>
               {isSubmitting ? "Creating..." : "Create Bot"}
             </Button>
           </div>
