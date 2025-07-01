@@ -19,9 +19,6 @@ from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 import uvicorn
 import logging
-import yfinance as yf
-import talib
-from datetime import datetime
 from dotenv import load_dotenv
 
 # Configure logging
@@ -34,7 +31,7 @@ logging.basicConfig(
 load_dotenv()
 
 # Initialize FastAPI app
-app = FastAPI(title="Tekoa Chart Engine")
+app = FastAPI(title="Trade Tracker Chart Engine")
 
 # Add CORS middleware
 app.add_middleware(
@@ -61,23 +58,6 @@ class ChartRequest(BaseModel):
     height: int = Field(800, description="Chart height in pixels", gt=0, le=2000)
     indicators: Optional[Dict[str, Dict[str, Any]]] = Field(None, description="Technical indicators")
     separate_oscillators: bool = Field(True, description="Whether to place oscillators in separate panels")
-
-# Legacy support for yfinance-based requests
-class LegacyChartRequest(BaseModel):
-    symbol: str
-    timeframe: str = "1d"
-    period: str = "30d"
-    indicators: Optional[Dict[str, Dict[str, Any]]] = None
-    chart_type: str = "candle"
-    width: int = 1200
-    height: int = 800
-
-class IndicatorRequest(BaseModel):
-    symbol: str
-    timeframe: str = "1d"
-    period: str = "30d"
-    indicator: str
-    params: Optional[dict] = None
 
 # Helper function to convert data to pandas DataFrame with error handling
 def convert_to_dataframe(data: List[OHLCVData]) -> pd.DataFrame:
@@ -151,25 +131,31 @@ def add_indicators(df: pd.DataFrame, indicators: Dict[str, Dict[str, Any]]) -> L
                         df[f'SMA_{period}'] = sma_values
                         addplots.append(mpf.make_addplot(df[f'SMA_{period}'], color=color))
 
-            elif indicator_name.lower() == 'ema':
-                period = params.get('period', 20)
-                color = params.get('color', 'red')
-                # Ensure we have enough data for EMA calculation
-                effective_period = min(period, max(1, len(df) - 1))
-                if effective_period >= 1:
-                    ema_values = df['close'].ewm(span=effective_period, adjust=False).mean()
+            # ATR indicator
+            if indicator_name.lower() == 'atr':
+                period = params.get('period', 14)
+                color = params.get('color', 'brown')
+                # Ensure we have enough data for ATR calculation
+                effective_period = min(period, max(2, len(df) - 1))
+                if len(df) >= effective_period + 1:  # Need at least period+1 for ATR
+                    # Calculate ATR
+                    tr1 = abs(df['high'] - df['low'])
+                    tr2 = abs(df['high'] - df['close'].shift())
+                    tr3 = abs(df['low'] - df['close'].shift())
+                    tr = pd.DataFrame({'tr1': tr1, 'tr2': tr2, 'tr3': tr3}).max(axis=1)
+                    atr_values = tr.rolling(window=effective_period).mean()
                     # Only add if we have valid values
-                    if not ema_values.dropna().empty:
-                        df[f'EMA_{period}'] = ema_values
-                        addplots.append(mpf.make_addplot(df[f'EMA_{period}'], color=color))
-
+                    if not atr_values.dropna().empty:
+                        df['ATR'] = atr_values
+                        # Use a separate panel for ATR
+                        addplots.append(mpf.make_addplot(df['ATR'], panel=3, color=color, ylabel='ATR'))
             elif indicator_name.lower() == 'rsi':
                 period = params.get('period', 14)
                 color = params.get('color', 'purple')
                 # Ensure we have enough data for RSI calculation
                 effective_period = min(period, max(2, len(df) - 1))
                 if len(df) >= effective_period + 1:  # Need at least period+1 for RSI
-                    # Calculate RSI directly for better performance
+                    # Calculate RSI directly
                     delta = df['close'].diff()
                     gain = delta.where(delta > 0, 0)
                     loss = -delta.where(delta < 0, 0)
@@ -183,6 +169,51 @@ def add_indicators(df: pd.DataFrame, indicators: Dict[str, Dict[str, Any]]) -> L
                         df['RSI'] = rsi_values
                         # Use a separate panel for RSI
                         addplots.append(mpf.make_addplot(df['RSI'], panel=2, color=color, ylabel='RSI'))
+
+            elif indicator_name.lower() == 'ema':
+                period = params.get('period', 20)
+                color = params.get('color', 'red')
+                # Ensure we have enough data for EMA calculation
+                effective_period = min(period, max(1, len(df) - 1))
+                if effective_period >= 1:
+                    ema_values = df['close'].ewm(span=effective_period, adjust=False).mean()
+                    # Only add if we have valid values
+                    if not ema_values.dropna().empty:
+                        df[f'EMA_{period}'] = ema_values
+                        addplots.append(mpf.make_addplot(df[f'EMA_{period}'], color=color))
+
+            elif indicator_name.lower() in ['bollinger', 'bb', 'bollingerbands']:
+                period = params.get('period', 20)
+                std_dev = params.get('stdDev', params.get('std_dev', 2))
+
+                logging.info(f"🎯 Processing Bollinger Bands: period={period}, stdDev={std_dev}")
+
+                # Use smaller window if dataset is small, but ensure minimum of 2
+                window = min(period, max(2, len(df) - 1))
+
+                logging.info(f"🎯 BB window size: {window}, DataFrame length: {len(df)}")
+
+                if len(df) >= window:
+                    bb_middle = df['close'].rolling(window=window).mean()
+                    bb_std = df['close'].rolling(window=window).std()
+                    bb_upper = bb_middle + std_dev * bb_std
+                    bb_lower = bb_middle - std_dev * bb_std
+
+                    # Only add if we have valid values
+                    if not bb_middle.dropna().empty and not bb_std.dropna().empty:
+                        df[f'BB_middle_{period}'] = bb_middle
+                        df[f'BB_upper_{period}'] = bb_upper
+                        df[f'BB_lower_{period}'] = bb_lower
+
+                        addplots.append(mpf.make_addplot(df[f'BB_upper_{period}'], color='green', linestyle='--'))
+                        addplots.append(mpf.make_addplot(df[f'BB_middle_{period}'], color='blue'))
+                        addplots.append(mpf.make_addplot(df[f'BB_lower_{period}'], color='green', linestyle='--'))
+
+                        logging.info(f"✅ Successfully added Bollinger Bands to chart: {len([x for x in [bb_middle, bb_upper, bb_lower] if not x.dropna().empty])} bands")
+                    else:
+                        logging.warning(f"❌ BB calculation failed - empty values. Middle empty: {bb_middle.dropna().empty}, Std empty: {bb_std.dropna().empty}")
+                else:
+                    logging.warning(f"❌ Insufficient data for BB: need {window}, have {len(df)}")
 
             elif indicator_name.lower() == 'macd':
                 fast = min(params.get('fast', 12), len(df)//4)
@@ -201,247 +232,20 @@ def add_indicators(df: pd.DataFrame, indicators: Dict[str, Dict[str, Any]]) -> L
                     # Only add if we have valid values
                     if not df['MACD_line'].dropna().empty:
                         # Create panel for MACD
-                        addplots.append(mpf.make_addplot(df['MACD_line'], panel=3, color='blue', ylabel='MACD'))
-                        addplots.append(mpf.make_addplot(df['MACD_signal'], panel=3, color='red'))
-                        addplots.append(mpf.make_addplot(df['MACD_histogram'], panel=3, type='bar', color='green'))
-
-            elif indicator_name.lower() == 'bollinger':
-                period = params.get('period', 20)
-                std_dev = params.get('std_dev', 2)
-
-                # Use smaller window if dataset is small, but ensure minimum of 2
-                window = min(period, max(2, len(df) - 1))
-
-                if len(df) >= window:
-                    bb_middle = df['close'].rolling(window=window).mean()
-                    bb_std = df['close'].rolling(window=window).std()
-                    bb_upper = bb_middle + std_dev * bb_std
-                    bb_lower = bb_middle - std_dev * bb_std
-
-                    # Only add if we have valid values
-                    if not bb_middle.dropna().empty and not bb_std.dropna().empty:
-                        df[f'BB_middle_{period}'] = bb_middle
-                        df[f'BB_upper_{period}'] = bb_upper
-                        df[f'BB_lower_{period}'] = bb_lower
-
-                        addplots.append(mpf.make_addplot(df[f'BB_upper_{period}'], color='green', linestyle='--'))
-                        addplots.append(mpf.make_addplot(df[f'BB_middle_{period}'], color='blue'))
-                        addplots.append(mpf.make_addplot(df[f'BB_lower_{period}'], color='green', linestyle='--'))
-
-            elif indicator_name.lower() == 'atr':
-                period = params.get('period', 14)
-                color = params.get('color', 'brown')
-                # Ensure we have enough data for ATR calculation
-                effective_period = min(period, max(2, len(df) - 1))
-                if len(df) >= effective_period + 1:  # Need at least period+1 for ATR
-                    # Calculate ATR
-                    tr1 = abs(df['high'] - df['low'])
-                    tr2 = abs(df['high'] - df['close'].shift())
-                    tr3 = abs(df['low'] - df['close'].shift())
-                    tr = pd.DataFrame({'tr1': tr1, 'tr2': tr2, 'tr3': tr3}).max(axis=1)
-                    atr_values = tr.rolling(window=effective_period).mean()
-                    # Only add if we have valid values
-                    if not atr_values.dropna().empty:
-                        df['ATR'] = atr_values
-                        # Use a separate panel for ATR
-                        addplots.append(mpf.make_addplot(df['ATR'], panel=4, color=color, ylabel='ATR'))
-
-            elif indicator_name.lower() == 'stochastic':
-                k_period = params.get('k_period', 14)
-                d_period = params.get('d_period', 3)
-
-                # Ensure we have enough data for Stochastic calculation
-                effective_k = min(k_period, max(2, len(df) - 1))
-                effective_d = min(d_period, max(1, len(df) - 1))
-
-                if len(df) >= effective_k + effective_d:
-                    # Calculate Stochastic %K and %D
-                    low_min = df['low'].rolling(window=effective_k).min()
-                    high_max = df['high'].rolling(window=effective_k).max()
-                    k_percent = 100 * ((df['close'] - low_min) / (high_max - low_min))
-                    d_percent = k_percent.rolling(window=effective_d).mean()
-
-                    # Only add if we have valid values
-                    if not k_percent.dropna().empty and not d_percent.dropna().empty:
-                        df['STOCH_K'] = k_percent
-                        df['STOCH_D'] = d_percent
-                        addplots.append(mpf.make_addplot(df['STOCH_K'], panel=5, color='blue', ylabel='Stochastic'))
-                        addplots.append(mpf.make_addplot(df['STOCH_D'], panel=5, color='red'))
-
-            elif indicator_name.lower() == 'vwap':
-                # Volume Weighted Average Price
-                color = params.get('color', 'orange')
-                if len(df) >= 2 and 'volume' in df.columns:
-                    # Calculate VWAP
-                    typical_price = (df['high'] + df['low'] + df['close']) / 3
-                    vwap_values = (typical_price * df['volume']).cumsum() / df['volume'].cumsum()
-
-                    # Only add if we have valid values
-                    if not vwap_values.dropna().empty:
-                        df['VWAP'] = vwap_values
-                        addplots.append(mpf.make_addplot(df['VWAP'], color=color, linestyle='-', linewidth=2))
-
-            elif indicator_name.lower() == 'volume':
-                # Volume indicator (usually shown in separate panel)
-                color = params.get('color', 'lightblue')
-                if 'volume' in df.columns and not df['volume'].dropna().empty:
-                    # Volume is typically shown as bars in panel 1
-                    addplots.append(mpf.make_addplot(df['volume'], panel=1, type='bar', color=color, alpha=0.6, ylabel='Volume'))
-
-            elif indicator_name.lower() == 'wma':
-                period = params.get('period', 20)
-                color = params.get('color', 'green')
-                # Ensure we have enough data for WMA calculation
-                effective_period = min(period, max(1, len(df) - 1))
-                if effective_period >= 1:
-                    # Calculate WMA (Weighted Moving Average)
-                    weights = pd.Series(range(1, effective_period + 1))
-                    wma_values = df['close'].rolling(window=effective_period).apply(
-                        lambda x: (x * weights).sum() / weights.sum(), raw=False
-                    )
-                    # Only add if we have valid values
-                    if not wma_values.dropna().empty:
-                        df[f'WMA_{period}'] = wma_values
-                        addplots.append(mpf.make_addplot(df[f'WMA_{period}'], color=color))
-
-            elif indicator_name.lower() == 'cci':
-                period = params.get('period', 20)
-                color = params.get('color', 'cyan')
-                # Ensure we have enough data for CCI calculation
-                effective_period = min(period, max(2, len(df) - 1))
-                if len(df) >= effective_period + 1:
-                    # Calculate CCI (Commodity Channel Index)
-                    typical_price = (df['high'] + df['low'] + df['close']) / 3
-                    sma_tp = typical_price.rolling(window=effective_period).mean()
-                    mean_deviation = typical_price.rolling(window=effective_period).apply(
-                        lambda x: abs(x - x.mean()).mean(), raw=False
-                    )
-                    cci_values = (typical_price - sma_tp) / (0.015 * mean_deviation)
-
-                    # Only add if we have valid values
-                    if not cci_values.dropna().empty:
-                        df['CCI'] = cci_values
-                        # Use a separate panel for CCI
-                        if 'cci' not in panel_assignments:
-                            panel_assignments['cci'] = next_panel
-                            next_panel += 1
-                        addplots.append(mpf.make_addplot(df['CCI'], panel=panel_assignments['cci'], color=color, ylabel='CCI'))
-
-            elif indicator_name.lower() in ['williams_r', 'williamsr', 'williams%r']:
-                period = params.get('period', 14)
-                color = params.get('color', 'magenta')
-                # Ensure we have enough data for Williams %R calculation
-                effective_period = min(period, max(2, len(df) - 1))
-                if len(df) >= effective_period + 1:
-                    # Calculate Williams %R
-                    highest_high = df['high'].rolling(window=effective_period).max()
-                    lowest_low = df['low'].rolling(window=effective_period).min()
-                    williams_r = -100 * ((highest_high - df['close']) / (highest_high - lowest_low))
-
-                    # Only add if we have valid values
-                    if not williams_r.dropna().empty:
-                        df['WILLIAMS_R'] = williams_r
-                        # Use a separate panel for Williams %R
-                        if 'williams_r' not in panel_assignments:
-                            panel_assignments['williams_r'] = next_panel
-                            next_panel += 1
-                        addplots.append(mpf.make_addplot(df['WILLIAMS_R'], panel=panel_assignments['williams_r'], color=color, ylabel='Williams %R'))
-
-            elif indicator_name.lower() == 'adx':
-                period = params.get('period', 14)
-                color = params.get('color', 'darkred')
-                # Ensure we have enough data for ADX calculation
-                effective_period = min(period, max(2, len(df) - 1))
-                if len(df) >= effective_period + 2:
-                    # Calculate ADX (Average Directional Index)
-                    # Calculate True Range (TR)
-                    tr1 = abs(df['high'] - df['low'])
-                    tr2 = abs(df['high'] - df['close'].shift())
-                    tr3 = abs(df['low'] - df['close'].shift())
-                    tr = pd.DataFrame({'tr1': tr1, 'tr2': tr2, 'tr3': tr3}).max(axis=1)
-
-                    # Calculate Directional Movement
-                    plus_dm = df['high'].diff()
-                    minus_dm = -df['low'].diff()
-                    plus_dm[plus_dm < 0] = 0
-                    minus_dm[minus_dm < 0] = 0
-
-                    # Smooth TR, +DM, -DM
-                    tr_smooth = tr.rolling(window=effective_period).mean()
-                    plus_dm_smooth = plus_dm.rolling(window=effective_period).mean()
-                    minus_dm_smooth = minus_dm.rolling(window=effective_period).mean()
-
-                    # Calculate +DI and -DI
-                    plus_di = 100 * plus_dm_smooth / tr_smooth
-                    minus_di = 100 * minus_dm_smooth / tr_smooth
-
-                    # Calculate DX and ADX
-                    dx = 100 * abs(plus_di - minus_di) / (plus_di + minus_di)
-                    adx_values = dx.rolling(window=effective_period).mean()
-
-                    # Only add if we have valid values
-                    if not adx_values.dropna().empty:
-                        df['ADX'] = adx_values
-                        # Use a separate panel for ADX
-                        if 'adx' not in panel_assignments:
-                            panel_assignments['adx'] = next_panel
-                            next_panel += 1
-                        addplots.append(mpf.make_addplot(df['ADX'], panel=panel_assignments['adx'], color=color, ylabel='ADX'))
-
-            elif indicator_name.lower() in ['psar', 'parabolicsar']:
-                initial_af = params.get('af_initial', 0.02)
-                max_af = params.get('af_max', 0.2)
-                color = params.get('color', 'yellow')
-
-                if len(df) >= 3:
-                    # Calculate Parabolic SAR
-                    psar = df['close'].copy()
-                    af = initial_af
-                    ep = df['high'].iloc[0]
-                    trend = 1  # 1 for uptrend, -1 for downtrend
-
-                    for i in range(1, len(df)):
-                        if trend == 1:  # Uptrend
-                            psar.iloc[i] = psar.iloc[i-1] + af * (ep - psar.iloc[i-1])
-                            if df['high'].iloc[i] > ep:
-                                ep = df['high'].iloc[i]
-                                af = min(af + initial_af, max_af)
-                            if df['low'].iloc[i] < psar.iloc[i]:
-                                trend = -1
-                                psar.iloc[i] = ep
-                                ep = df['low'].iloc[i]
-                                af = initial_af
-                        else:  # Downtrend
-                            psar.iloc[i] = psar.iloc[i-1] + af * (ep - psar.iloc[i-1])
-                            if df['low'].iloc[i] < ep:
-                                ep = df['low'].iloc[i]
-                                af = min(af + initial_af, max_af)
-                            if df['high'].iloc[i] > psar.iloc[i]:
-                                trend = 1
-                                psar.iloc[i] = ep
-                                ep = df['high'].iloc[i]
-                                af = initial_af
-
-                    # Only add if we have valid values
-                    if not psar.dropna().empty:
-                        df['PSAR'] = psar
-                        addplots.append(mpf.make_addplot(df['PSAR'], type='scatter', markersize=20, color=color, alpha=0.7))
-
+                        addplots.append(mpf.make_addplot(df['MACD_line'], panel=1, color='blue'))
+                        addplots.append(mpf.make_addplot(df['MACD_signal'], panel=1, color='red'))
+                        addplots.append(mpf.make_addplot(df['MACD_histogram'], panel=1, type='bar', color='green'))
         except Exception as e:
             logging.error(f"Error calculating indicator {indicator_name}: {str(e)}")
             # Continue processing other indicators instead of failing completely
 
-    logging.info(f"Added {len(addplots)} indicator plots in {time.time() - start_time:.2f} seconds")
+    logging.info(f"Added {len(addplots)} indicator components to chart in {time.time() - start_time:.2f} seconds")
     return addplots
 
 def cleanup_resources():
     """Clean up matplotlib resources to prevent memory leaks"""
     plt.close('all')
     gc.collect()
-
-@app.get("/health")
-async def health():
-    return {"status": "ok"}
 
 @app.post("/generate-chart")
 async def generate_chart(request: ChartRequest, background_tasks: BackgroundTasks):
@@ -604,278 +408,92 @@ async def generate_chart(request: ChartRequest, background_tasks: BackgroundTask
             "chart_type": chart_type,
             "width": width,
             "height": height,
-            "data_points": len(df),
-            "indicators_applied": list(request.indicators.keys()) if request.indicators else [],
             "processing_time": round(total_time, 2)
         }
-
-    except ValueError as ve:
-        logging.error(f"Data validation error: {str(ve)}")
-        plt.close('all')
-        raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
-        logging.error(f"Chart generation error: {str(e)}")
+        # Log the full exception with traceback
+        logging.error(f"Error generating chart: {str(e)}")
         logging.error(traceback.format_exc())
+
+        # Always close plots in case of error
         plt.close('all')
-        raise HTTPException(status_code=500, detail=f"Chart generation failed: {str(e)}")
 
-# Legacy endpoint for backward compatibility with yfinance
-@app.post("/generate-chart-legacy")
-async def generate_chart_legacy(request: LegacyChartRequest, background_tasks: BackgroundTasks):
-    """Legacy endpoint that fetches data from yfinance for backward compatibility"""
-    try:
-        # Add cleanup to background tasks
-        background_tasks.add_task(cleanup_resources)
-
-        # Fetch data from yfinance
-        ticker = yf.Ticker(request.symbol)
-        data = ticker.history(period=request.period, interval=request.timeframe)
-
-        if data.empty:
-            raise HTTPException(status_code=404, detail="No data found for symbol")
-
-        # Convert yfinance data to our OHLCV format
-        ohlcv_data = []
-        for index, row in data.iterrows():
-            ohlcv_data.append(OHLCVData(
-                datetime=index.isoformat(),
-                open=float(row['Open']),
-                high=float(row['High']),
-                low=float(row['Low']),
-                close=float(row['Close']),
-                volume=float(row['Volume'])
-            ))
-
-        # Create new request with converted data
-        new_request = ChartRequest(
-            data=ohlcv_data,
-            chart_type=request.chart_type,
-            width=request.width,
-            height=request.height,
-            indicators=request.indicators,
-            separate_oscillators=True
-        )
-
-        # Use the main generate_chart function
-        result = await generate_chart(new_request, background_tasks)
-
-        # Add legacy fields for backward compatibility
-        result["symbol"] = request.symbol
-        result["chart"] = f"data:image/png;base64,{result['chart_image']}"
-
-        return result
-
-    except Exception as e:
-        plt.close('all')
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/calculate-indicator")
-async def calculate_indicator(request: IndicatorRequest):
-    try:
-        # Fetch data
-        ticker = yf.Ticker(request.symbol)
-        data = ticker.history(period=request.period, interval=request.timeframe)
-
-        if data.empty:
-            raise HTTPException(status_code=404, detail="No data found for symbol")
-
-        # Calculate indicator
-        result = {}
-        indicator = request.indicator.upper()
-
-        if indicator == "SMA":
-            period = request.params.get("period", 20) if request.params else 20
-            result["values"] = talib.SMA(data['Close'], timeperiod=period).tolist()
-            result["name"] = f"SMA({period})"
-
-        elif indicator == "RSI":
-            period = request.params.get("period", 14) if request.params else 14
-            result["values"] = talib.RSI(data['Close'], timeperiod=period).tolist()
-            result["name"] = f"RSI({period})"
-
-        elif indicator == "MACD":
-            macd, signal, hist = talib.MACD(data['Close'])
-            result["macd"] = macd.tolist()
-            result["signal"] = signal.tolist()
-            result["histogram"] = hist.tolist()
-            result["name"] = "MACD"
-
-        elif indicator == "BOLLINGER":
-            upper, middle, lower = talib.BBANDS(data['Close'])
-            result["upper"] = upper.tolist()
-            result["middle"] = middle.tolist()
-            result["lower"] = lower.tolist()
-            result["name"] = "Bollinger Bands"
-
-        elif indicator == "STOCHASTIC":
-            k, d = talib.STOCH(data['High'], data['Low'], data['Close'])
-            result["k"] = k.tolist()
-            result["d"] = d.tolist()
-            result["name"] = "Stochastic"
-
-        elif indicator == "ATR":
-            period = request.params.get("period", 14) if request.params else 14
-            result["values"] = talib.ATR(data['High'], data['Low'], data['Close'], timeperiod=period).tolist()
-            result["name"] = f"ATR({period})"
-
-        else:
-            raise HTTPException(status_code=400, detail=f"Indicator {indicator} not supported")
-
-        result["symbol"] = request.symbol
-        result["dates"] = data.index.strftime('%Y-%m-%d %H:%M:%S').tolist()
-
-        return result
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/supported-indicators")
-async def get_supported_indicators():
-    return {
-        "indicators": [
-            {
-                "name": "sma",
-                "display_name": "Simple Moving Average",
-                "params": ["period", "color"],
-                "defaults": {"period": 20, "color": "blue"},
-                "panel": "main"
-            },
-            {
-                "name": "ema",
-                "display_name": "Exponential Moving Average",
-                "params": ["period", "color"],
-                "defaults": {"period": 20, "color": "red"},
-                "panel": "main"
-            },
-            {
-                "name": "rsi",
-                "display_name": "Relative Strength Index",
-                "params": ["period", "color"],
-                "defaults": {"period": 14, "color": "purple"},
-                "panel": "oscillator"
-            },
-            {
-                "name": "macd",
-                "display_name": "MACD",
-                "params": ["fast", "slow", "signal"],
-                "defaults": {"fast": 12, "slow": 26, "signal": 9},
-                "panel": "oscillator"
-            },
-            {
-                "name": "bollinger",
-                "display_name": "Bollinger Bands",
-                "params": ["period", "std_dev"],
-                "defaults": {"period": 20, "std_dev": 2},
-                "panel": "main"
-            },
-            {
-                "name": "atr",
-                "display_name": "Average True Range",
-                "params": ["period", "color"],
-                "defaults": {"period": 14, "color": "brown"},
-                "panel": "oscillator"
-            },
-            {
-                "name": "stochastic",
-                "display_name": "Stochastic Oscillator",
-                "params": ["k_period", "d_period"],
-                "defaults": {"k_period": 14, "d_period": 3},
-                "panel": "oscillator"
-            },
-            {
-                "name": "vwap",
-                "display_name": "Volume Weighted Average Price",
-                "params": ["color"],
-                "defaults": {"color": "orange"},
-                "panel": "main"
-            },
-            {
-                "name": "volume",
-                "display_name": "Volume",
-                "params": ["color"],
-                "defaults": {"color": "lightblue"},
-                "panel": "main"
-            },
-            {
-                "name": "wma",
-                "display_name": "Weighted Moving Average",
-                "params": ["period", "color"],
-                "defaults": {"period": 20, "color": "green"},
-                "panel": "main"
-            },
-            {
-                "name": "cci",
-                "display_name": "Commodity Channel Index",
-                "params": ["period", "color"],
-                "defaults": {"period": 20, "color": "cyan"},
-                "panel": "main"
-            },
-            {
-                "name": "williams_r",
-                "display_name": "Williams %R",
-                "params": ["period", "color"],
-                "defaults": {"period": 14, "color": "magenta"},
-                "panel": "oscillator"
-            },
-            {
-                "name": "adx",
-                "display_name": "Average Directional Index",
-                "params": ["period", "color"],
-                "defaults": {"period": 14, "color": "darkred"},
-                "panel": "main"
-            },
-            {
-                "name": "psar",
-                "display_name": "Parabolic SAR",
-                "params": ["af_initial", "af_max", "color"],
-                "defaults": {"af_initial": 0.02, "af_max": 0.2, "color": "yellow"},
-                "panel": "main"
+        # Return a proper error response
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "error": str(e),
+                "detail": "Chart generation failed"
             }
-        ]
-    }
+        )
 
 @app.get("/")
 async def root():
     return {
-        "message": "Tekoa Chart Engine",
-        "version": "2.0.0",
+        "message": "Trade Tracker Chart Engine API",
         "status": "running",
-        "endpoints": [
-            "/generate-chart",
-            "/generate-chart-legacy",
-            "/calculate-indicator",
-            "/supported-indicators",
-            "/health",
-            "/ping",
-            "/stats"
-        ]
+        "memory_usage": f"{gc.collect()} objects collected"
     }
 
 @app.get("/ping")
 async def ping():
-    return {"message": "pong", "timestamp": time.time()}
+    """Simple health check endpoint"""
+    return {"status": "ok", "timestamp": time.time()}
+
+@app.get("/chart-status")
+async def chart_status():
+    """Chart engine status endpoint - expected by sophisticated chart service"""
+    return {
+        "status": "ready",
+        "engine": "mplfinance",
+        "version": "1.0.0",
+        "uptime": time.time() - START_TIME,
+        "memory_collected": gc.collect()
+    }
+
+@app.get("/health")
+async def health():
+    """Health check endpoint for fallback server management"""
+    return {
+        "status": "healthy",
+        "timestamp": time.time(),
+        "uptime": time.time() - START_TIME
+    }
 
 @app.get("/stats")
 async def stats():
-    import psutil
-    import os
-
-    process = psutil.Process(os.getpid())
-    memory_info = process.memory_info()
-
+    """Return some basic stats about the chart engine"""
+    gc.collect()  # Run garbage collection
     return {
-        "server": {
-            "uptime": time.time(),
-            "memory_usage_mb": round(memory_info.rss / 1024 / 1024, 2),
-            "cpu_percent": process.cpu_percent(),
-            "threads": process.num_threads()
-        },
-        "system": {
-            "cpu_count": psutil.cpu_count(),
-            "memory_total_gb": round(psutil.virtual_memory().total / 1024 / 1024 / 1024, 2),
-            "memory_available_gb": round(psutil.virtual_memory().available / 1024 / 1024 / 1024, 2)
-        }
+        "status": "running",
+        "uptime": time.time() - START_TIME,
+        "python_version": os.sys.version,
+        "matplotlib_version": matplotlib.__version__,
+        "mplfinance_version": mpf.__version__,
+        "memory_info": "Memory stats collection not available"
     }
 
+# Track server start time
+START_TIME = time.time()
+
+# Run the server if executed directly
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8001, log_level="info")
+    port = int(os.getenv("CHART_ENGINE_PORT", 5001))
+    host = os.getenv("CHART_ENGINE_HOST", "0.0.0.0")  # Changed to accept all connections
+
+    # Log startup information
+    logging.info(f"Starting chart engine on {host}:{port}")
+    logging.info(f"Python version: {os.sys.version}")
+    logging.info(f"Matplotlib version: {matplotlib.__version__}")
+    logging.info(f"MPLFinance version: {mpf.__version__}")
+
+    # Configure uvicorn with worker settings
+    uvicorn.run(
+        "main:app",
+        host=host,
+        port=port,
+        reload=False,  # Disable auto-reload for production
+        workers=1,  # Use only 1 worker due to matplotlib limitations
+        timeout_keep_alive=30  # Reduce keep-alive time
+    )

@@ -1,11 +1,17 @@
 import { prisma } from "../prisma";
 import { logger } from "../logger";
 import { CapitalMainService } from "../modules/capital";
-import { TechnicalAnalysisAgent, RiskAssessmentAgent, TradingDecisionAgent } from "../agents";
+import {
+  SophisticatedTradingAgent,
+  SophisticatedTradeParams,
+  SophisticatedTradeResult,
+} from "../agents/trading/sophisticated-trading.agent";
+import { CandleData } from "../agents/core/technical-analysis.agent";
 import { EnhancedTradingDecisionAgent } from "../ai/enhanced-trading-decision-agent";
 import { credentialsEncryption } from "./credentials-encryption.service";
 import { supabaseStorageService } from "./supabase-storage.service";
 import { ChartService } from "../modules/chart";
+import { marketValidationService } from "./market-validation.service";
 
 // Type definitions
 interface MarketData {
@@ -52,14 +58,11 @@ export interface TradeExecutionResult {
  * Sophisticated bot evaluation service with real trading capabilities
  */
 export class BotEvaluationService {
-  private technicalAnalysisAgent: TechnicalAnalysisAgent;
-  private riskAssessmentAgent: RiskAssessmentAgent;
-  private tradingDecisionAgent: TradingDecisionAgent;
+  private sophisticatedTradingAgent: SophisticatedTradingAgent;
+  private capitalApiInstances: Map<string, any> = new Map(); // Cache authenticated instances
 
   constructor() {
-    this.technicalAnalysisAgent = new TechnicalAnalysisAgent();
-    this.riskAssessmentAgent = new RiskAssessmentAgent();
-    this.tradingDecisionAgent = new TradingDecisionAgent();
+    this.sophisticatedTradingAgent = new SophisticatedTradingAgent();
   }
 
   /**
@@ -93,8 +96,69 @@ export class BotEvaluationService {
 
       logger.info(`📊 Evaluating bot: ${bot.name} (${bot.tradingPairSymbol})`);
 
-      // Step 1: Generate chart
-      const chartResult = await this.generateBotChart(botId, bot.tradingPairSymbol, bot.timeframe);
+      // Step 0: Check if market is open for trading
+      if (!bot.brokerCredential || !bot.brokerCredential.credentials) {
+        throw new Error("No broker credentials configured for bot");
+      }
+
+      const credentials = credentialsEncryption.decryptCredentials(
+        bot.brokerCredential.credentials,
+      );
+      const cacheKey = `${botId}-${credentials.apiKey.slice(-8)}`;
+      let capitalApi = this.capitalApiInstances.get(cacheKey);
+
+      if (!capitalApi) {
+        const { CapitalMainService } = await import(
+          "../modules/capital/services/capital-main.service"
+        );
+        capitalApi = new CapitalMainService({
+          apiKey: credentials.apiKey,
+          identifier: credentials.identifier,
+          password: credentials.password,
+          isDemo: bot.brokerCredential.isDemo,
+          instanceId: `bot-${botId}`,
+        });
+        await capitalApi.authenticate();
+        this.capitalApiInstances.set(cacheKey, capitalApi);
+      }
+
+      const marketHoursCheck = await marketValidationService.checkMarketTradingHours(
+        bot.tradingPairSymbol,
+        capitalApi,
+      );
+
+      if (!marketHoursCheck.allowed) {
+        logger.info(`⏰ Market closed for ${bot.tradingPairSymbol}: ${marketHoursCheck.reason}`);
+        return {
+          success: true,
+          data: {
+            message: `Market closed: ${marketHoursCheck.reason}`,
+            decision: "HOLD",
+            marketStatus: "CLOSED",
+          },
+        };
+      }
+
+      logger.info(`✅ Market is open for ${bot.tradingPairSymbol}: ${marketHoursCheck.reason}`);
+
+      // Step 0.5: Fetch historical data ONCE for all processes (optimization)
+      logger.info(`📊 Fetching historical data once for all processes...`);
+      const sharedCandleData = await this.getHistoricalCandleData(
+        bot.tradingPairSymbol,
+        bot.timeframe,
+        botId,
+        400, // 400 bars for comprehensive analysis
+      );
+      logger.info(`✅ Shared candlestick data ready: ${sharedCandleData.length} bars`);
+
+      // Step 1: Generate chart (using shared data)
+      const chartResult = await this.generateBotChart(
+        botId,
+        bot.tradingPairSymbol,
+        bot.timeframe,
+        bot,
+        sharedCandleData, // Pass shared data
+      );
 
       if (!chartResult.success) {
         throw new Error(`Chart generation failed: ${chartResult.error}`);
@@ -103,13 +167,14 @@ export class BotEvaluationService {
       // Step 2: Collect portfolio context
       const portfolioContext = await this.collectPortfolioContext(bot.userId, botId);
 
-      // Step 3: Perform AI analysis
+      // Step 3: Perform AI analysis (using shared data)
       const analysisResult = await this.performAIAnalysis(
         bot.tradingPairSymbol,
         bot.timeframe,
         chartResult.chartUrl!,
-        portfolioContext,
+        { ...portfolioContext, botId, bot }, // Pass bot data to analysis
         await this.getRealMarketPrice(bot.tradingPairSymbol, botId), // Real market price
+        sharedCandleData, // Pass shared data
       );
 
       if (!analysisResult.success) {
@@ -141,6 +206,7 @@ export class BotEvaluationService {
           bot,
           analysisResult.data,
           evaluation.id,
+          sharedCandleData, // Pass shared data
         );
         tradeExecuted = tradeResult.success;
       }
@@ -176,6 +242,8 @@ export class BotEvaluationService {
     botId: string,
     symbol: string,
     timeframe: string,
+    bot: any,
+    sharedCandleData?: CandleData[], // Optional shared data to avoid duplicate API calls
   ): Promise<{
     success: boolean;
     chartUrl?: string;
@@ -184,6 +252,51 @@ export class BotEvaluationService {
     try {
       logger.info(`📊 Generating chart for ${symbol} (${timeframe})`);
 
+      // Extract indicators from bot's strategy
+      let chartIndicators: any = undefined; // For ChartService format
+      let fallbackIndicators = ["SMA", "EMA", "RSI"]; // String array fallback
+
+      // Debug: Log bot strategy information
+      logger.info(
+        `📊 Bot strategy debug: strategyId=${bot.strategyId}, strategy=${!!bot.strategy}`,
+      );
+      if (bot.strategy) {
+        logger.info(
+          `📊 Strategy details: name="${bot.strategy.name}", indicators="${bot.strategy.indicators}"`,
+        );
+      }
+
+      if (bot?.strategy?.indicators) {
+        try {
+          // Parse the strategy indicators (stored as JSON string)
+          const parsedIndicators =
+            typeof bot.strategy.indicators === "string"
+              ? JSON.parse(bot.strategy.indicators)
+              : bot.strategy.indicators;
+
+          logger.info(`📊 Parsed indicators: ${JSON.stringify(parsedIndicators)}`);
+
+          if (Array.isArray(parsedIndicators) && parsedIndicators.length > 0) {
+            // Extract indicator types as strings for ChartService (it expects string[])
+            chartIndicators = parsedIndicators.map((ind) => ind.type || ind.name || "unknown");
+            logger.info(
+              `📊 Using ${parsedIndicators.length} strategy indicators: ${chartIndicators.join(", ")}`,
+            );
+          } else {
+            logger.warn(
+              `📊 Strategy indicators not valid array, using defaults: ${fallbackIndicators.join(", ")}`,
+            );
+            chartIndicators = fallbackIndicators;
+          }
+        } catch (error) {
+          logger.warn(`📊 Failed to parse strategy indicators, using defaults: ${error}`);
+        }
+      } else {
+        logger.warn(
+          `📊 No strategy indicators found, using defaults: ${fallbackIndicators.join(", ")}`,
+        );
+      }
+
       const chartService = new ChartService();
       const chartResult = await chartService.generateChart({
         symbol,
@@ -191,7 +304,7 @@ export class BotEvaluationService {
         width: 1200,
         height: 800,
         theme: "dark",
-        indicators: ["SMA", "EMA", "RSI"],
+        indicators: chartIndicators,
         botId, // Pass botId to use user's broker credentials
       });
 
@@ -199,13 +312,21 @@ export class BotEvaluationService {
         throw new Error("Chart generation failed");
       }
 
-      // Upload chart to Supabase storage
+      // Chart URL is already available from chartResult
+      let chartUrl = chartResult.chartUrl;
+      if (!chartUrl) {
+        throw new Error("Chart generation did not return a valid URL");
+      }
+
+      // Check if chart was uploaded to Supabase successfully
+      if (chartUrl.startsWith("temp://")) {
+        logger.warn("⚠️ Chart upload to Supabase failed, using temporary URL");
+      } else if (chartUrl.startsWith("http")) {
+        logger.info("✅ Chart successfully uploaded to Supabase storage");
+      }
+
+      // Extract filename from the chart URL or generate one
       const fileName = `${symbol}-${timeframe}-${Date.now()}.png`;
-      const chartUrl = await supabaseStorageService.uploadBase64Image(
-        chartResult.data,
-        fileName,
-        botId,
-      );
 
       // Save chart reference in database
       await prisma.chartImage.create({
@@ -217,6 +338,7 @@ export class BotEvaluationService {
           metadata: JSON.stringify({
             botId,
             generatedAt: new Date(),
+            uploadedToSupabase: chartUrl.startsWith("http"),
           }),
         },
       });
@@ -304,10 +426,13 @@ export class BotEvaluationService {
         throw new Error(error);
       }
 
-      // Parse the encrypted credentials
+      // Decrypt and parse the credentials
       let credentialsData;
       try {
-        credentialsData = JSON.parse(bot.brokerCredential.credentials);
+        const { credentialsEncryption } = await import("./credentials-encryption.service");
+        credentialsData = credentialsEncryption.decryptCredentials(
+          bot.brokerCredential.credentials,
+        );
       } catch (error) {
         const errorMsg = `❌ CREDENTIAL PARSING FAILED: Bot ${botId} broker credentials are corrupted.`;
         logger.error(errorMsg, error);
@@ -327,10 +452,22 @@ export class BotEvaluationService {
         isDemo: bot.brokerCredential.isDemo,
       };
 
-      // Import Capital API service
+      // Import Capital API service and reuse/cache authenticated instance
       const { getCapitalApiInstance } = await import("../modules/capital");
-      const capitalApi = getCapitalApiInstance(config);
-      await capitalApi.authenticate();
+
+      // Create cache key for this bot's credentials
+      const cacheKey = `${botId}-${config.apiKey.slice(-8)}`;
+
+      let capitalApi;
+      if (this.capitalApiInstances.has(cacheKey)) {
+        capitalApi = this.capitalApiInstances.get(cacheKey);
+        logger.info(`Reusing cached Capital API instance for bot ${botId}`);
+      } else {
+        capitalApi = getCapitalApiInstance(config);
+        await capitalApi.authenticate();
+        this.capitalApiInstances.set(cacheKey, capitalApi);
+        logger.info(`Created and cached new Capital API instance for bot ${botId}`);
+      }
 
       // Convert symbol to epic format
       const epic = this.convertSymbolToEpic(symbol);
@@ -354,29 +491,156 @@ export class BotEvaluationService {
   }
 
   /**
-   * Convert symbol to Capital.com epic format
+   * Convert symbol to Capital.com epic format with proper mappings
+   * Using working format from capital-main.service.ts
    */
   private convertSymbolToEpic(symbol: string): string {
     const symbolMappings: { [key: string]: string } = {
-      BTCUSD: "BITCOIN",
-      ETHUSD: "ETHEREUM",
-      EURUSD: "EURUSD",
-      GBPUSD: "GBPUSD",
-      USDJPY: "USDJPY",
-      AUDUSD: "AUDUSD",
-      USDCAD: "USDCAD",
-      USDCHF: "USDCHF",
-      NZDUSD: "NZDUSD",
-      EURGBP: "EURGBP",
-      EURJPY: "EURJPY",
-      GBPJPY: "GBPJPY",
+      // Cryptocurrency pairs - SIMPLE FORMAT (WORKING!)
+      BTC: "BTCUSD",
+      "BTC/USD": "BTCUSD",
+      BITCOIN: "BTCUSD",
+      BTCUSD: "BTCUSD",
+
+      ETH: "ETHUSD",
+      "ETH/USD": "ETHUSD",
+      ETHEREUM: "ETHUSD",
+      ETHUSD: "ETHUSD",
+
+      LTC: "LTCUSD",
+      "LTC/USD": "LTCUSD",
+      LITECOIN: "LTCUSD",
+      LTCUSD: "LTCUSD",
+
+      XRP: "XRPUSD",
+      "XRP/USD": "XRPUSD",
+      RIPPLE: "XRPUSD",
+      XRPUSD: "XRPUSD",
+
+      ADA: "ADAUSD",
+      "ADA/USD": "ADAUSD",
+      CARDANO: "ADAUSD",
+      ADAUSD: "ADAUSD",
+
+      SOL: "SOLUSD",
+      "SOL/USD": "SOLUSD",
+      SOLANA: "SOLUSD",
+      SOLUSD: "SOLUSD",
+
+      DOGE: "DOGEUSD",
+      "DOGE/USD": "DOGEUSD",
+      DOGECOIN: "DOGEUSD",
+      DOGEUSD: "DOGEUSD",
+
+      // Index pairs - CORRECT Capital.com epic formats
+      SPX500: "CS.D.SPXUSD.CFD.IP",
+      "S&P500": "CS.D.SPXUSD.CFD.IP",
+      SP500: "CS.D.SPXUSD.CFD.IP",
+      US500: "CS.D.SPXUSD.CFD.IP",
+
+      NASDAQ: "CS.D.NQHUSD.CFD.IP",
+      NAS100: "CS.D.NQHUSD.CFD.IP",
+      NASDAQ100: "CS.D.NQHUSD.CFD.IP",
+      US100: "CS.D.NQHUSD.CFD.IP",
+
+      DOW: "CS.D.DJUSD.CFD.IP",
+      DOWJONES: "CS.D.DJUSD.CFD.IP",
+      US30: "CS.D.DJUSD.CFD.IP",
+
+      // Forex pairs - CORRECT Capital.com epic formats
+      "EUR/USD": "CS.D.EURUSD.MINI.IP",
+      EURUSD: "CS.D.EURUSD.MINI.IP",
+
+      "GBP/USD": "CS.D.GBPUSD.MINI.IP",
+      GBPUSD: "CS.D.GBPUSD.MINI.IP",
+
+      "USD/CAD": "CS.D.USDCAD.MINI.IP",
+      USDCAD: "CS.D.USDCAD.MINI.IP",
+
+      "USD/JPY": "CS.D.USDJPY.MINI.IP",
+      USDJPY: "CS.D.USDJPY.MINI.IP",
+
+      "AUD/USD": "CS.D.AUDUSD.MINI.IP",
+      AUDUSD: "CS.D.AUDUSD.MINI.IP",
+
+      "USD/CHF": "CS.D.USDCHF.MINI.IP",
+      USDCHF: "CS.D.USDCHF.MINI.IP",
+
+      "NZD/USD": "CS.D.NZDUSD.MINI.IP",
+      NZDUSD: "CS.D.NZDUSD.MINI.IP",
+
+      "EUR/GBP": "CS.D.EURGBP.MINI.IP",
+      EURGBP: "CS.D.EURGBP.MINI.IP",
+
+      "EUR/JPY": "CS.D.EURJPY.MINI.IP",
+      EURJPY: "CS.D.EURJPY.MINI.IP",
+
+      "GBP/JPY": "CS.D.GBPJPY.MINI.IP",
+      GBPJPY: "CS.D.GBPJPY.MINI.IP",
+
+      // Commodities - CORRECT Capital.com epic formats
+      GOLD: "CS.D.GOLD.CFD.IP",
+      XAUUSD: "CS.D.GOLD.CFD.IP",
+      "XAU/USD": "CS.D.GOLD.CFD.IP",
+
+      SILVER: "CS.D.SILVER.CFD.IP",
+      XAGUSD: "CS.D.SILVER.CFD.IP",
+      "XAG/USD": "CS.D.SILVER.CFD.IP",
+
+      OIL: "CS.D.OILCMTY.CFD.IP",
+      CRUDE: "CS.D.OILCMTY.CFD.IP",
+      WTI: "CS.D.OILCMTY.CFD.IP",
+
+      NATURALGAS: "CS.D.NATURALGAS.CFD.IP",
     };
 
-    return symbolMappings[symbol.toUpperCase()] || symbol;
+    const epic = symbolMappings[symbol.toUpperCase()] || symbol;
+    logger.info(`Symbol mapping: ${symbol} -> ${epic}`);
+    return epic;
   }
 
   /**
-   * Perform AI analysis using multiple agents
+   * Convert symbol to Capital.com trading epic format (for actual trading)
+   * Some symbols need different format for trading vs historical data
+   */
+  private convertSymbolToTradingEpic(symbol: string): string {
+    const tradingMappings: { [key: string]: string } = {
+      // Cryptocurrency pairs - Trading requires CFD format
+      BTC: "CS.D.BITCOIN.CFD.IP",
+      "BTC/USD": "CS.D.BITCOIN.CFD.IP",
+      BITCOIN: "CS.D.BITCOIN.CFD.IP",
+      BTCUSD: "CS.D.BITCOIN.CFD.IP",
+
+      ETH: "CS.D.ETHEREUM.CFD.IP",
+      "ETH/USD": "CS.D.ETHEREUM.CFD.IP",
+      ETHEREUM: "CS.D.ETHEREUM.CFD.IP",
+      ETHUSD: "CS.D.ETHEREUM.CFD.IP",
+
+      LTC: "CS.D.LITECOIN.CFD.IP",
+      "LTC/USD": "CS.D.LITECOIN.CFD.IP",
+      LITECOIN: "CS.D.LITECOIN.CFD.IP",
+      LTCUSD: "CS.D.LITECOIN.CFD.IP",
+
+      // For non-crypto, use the same format as historical data
+      "EUR/USD": "CS.D.EURUSD.MINI.IP",
+      EURUSD: "CS.D.EURUSD.MINI.IP",
+
+      "GBP/USD": "CS.D.GBPUSD.MINI.IP",
+      GBPUSD: "CS.D.GBPUSD.MINI.IP",
+    };
+
+    const tradingEpic = tradingMappings[symbol.toUpperCase()];
+    if (tradingEpic) {
+      logger.info(`Trading symbol mapping: ${symbol} -> ${tradingEpic}`);
+      return tradingEpic;
+    }
+
+    // Fallback to regular epic format
+    return this.convertSymbolToEpic(symbol);
+  }
+
+  /**
+   * Perform AI analysis using sophisticated trading agent
    */
   private async performAIAnalysis(
     symbol: string,
@@ -384,51 +648,79 @@ export class BotEvaluationService {
     chartUrl: string,
     portfolioContext: any,
     marketPrice: any,
+    sharedCandleData?: CandleData[], // Optional shared data to avoid duplicate API calls
   ): Promise<{ success: boolean; data?: any; error?: string }> {
     try {
-      logger.info(`🧠 Performing AI analysis for ${symbol}`);
+      logger.info(`🧠 Performing sophisticated AI analysis for ${symbol}`);
 
-      // Technical Analysis
-      const technicalAnalysis = await this.technicalAnalysisAgent.analyze({
+      // Get account balance for analysis from portfolio context
+      let accountBalance = 10000; // Default fallback
+      if (portfolioContext?.portfolio?.balance) {
+        accountBalance = portfolioContext.portfolio.balance;
+      }
+
+      // Use shared candlestick data if available, otherwise fetch new data
+      const candleData =
+        sharedCandleData ||
+        (await this.getHistoricalCandleData(
+          symbol,
+          timeframe,
+          portfolioContext.botId || "unknown",
+          400, // Use same 400 bars as chart for consistency
+        ));
+
+      if (sharedCandleData) {
+        logger.info(
+          `📊 Using shared candlestick data (${candleData.length} bars) - API call avoided`,
+        );
+      }
+
+      // Run sophisticated analysis
+      const sophisticatedResult = await this.sophisticatedTradingAgent.analyzeTrade({
         symbol,
+        direction: "BUY", // Will be determined by the analysis
+        currentPrice: marketPrice.price,
+        candleData,
         timeframe,
-        chartUrl,
-        marketPrice,
+        accountBalance,
+        riskPercentage: 2.0,
+        botMaxPositionSize: portfolioContext?.bot?.maxPositionSize || 1000,
+        strategy: "technical_analysis",
       });
 
-      // Risk Assessment
-      const riskAssessment = await this.riskAssessmentAgent.analyze({
-        symbol,
-        portfolioContext,
-        marketPrice,
-        technicalAnalysis,
-      });
-
-      // Trading Decision
-      const tradingDecision = await this.tradingDecisionAgent.analyze({
-        symbol,
-        technicalAnalysis,
-        riskAssessment,
-        portfolioContext,
-        marketPrice,
-      });
+      // Map sophisticated results to expected format
+      const decision = sophisticatedResult.finalRecommendation.shouldTrade
+        ? sophisticatedResult.technicalAnalysis.trend === "BULLISH"
+          ? "BUY"
+          : "SELL"
+        : "HOLD";
 
       return {
         success: true,
         data: {
-          decision: (tradingDecision as any).decision,
-          confidence: tradingDecision.confidence,
-          reasoning: tradingDecision.reasoning,
-          technicalAnalysis,
-          riskAssessment,
-          recommendedPositionSize: (riskAssessment as any).recommendedPositionSize,
-          stopLoss: (riskAssessment as any).stopLoss,
-          takeProfit: (riskAssessment as any).takeProfit,
-          riskScore: (riskAssessment as any).riskScore,
+          decision,
+          confidence: sophisticatedResult.finalRecommendation.confidence,
+          reasoning: sophisticatedResult.finalRecommendation.reasoning.join("; "),
+          technicalAnalysis: {
+            trend: sophisticatedResult.technicalAnalysis.trend,
+            atr: sophisticatedResult.technicalAnalysis.atr,
+            summary: `${sophisticatedResult.technicalAnalysis.trend} trend (ATR: ${sophisticatedResult.technicalAnalysis.atr.toFixed(2)})`,
+          },
+          riskAssessment: {
+            riskScore: sophisticatedResult.riskLevels.riskRewardRatio,
+            recommendedPositionSize: sophisticatedResult.finalRecommendation.positionSize,
+            stopLoss: sophisticatedResult.finalRecommendation.stopLoss,
+            takeProfit: sophisticatedResult.finalRecommendation.takeProfit,
+          },
+          recommendedPositionSize: sophisticatedResult.finalRecommendation.positionSize,
+          stopLoss: sophisticatedResult.finalRecommendation.stopLoss,
+          takeProfit: sophisticatedResult.finalRecommendation.takeProfit,
+          riskScore: sophisticatedResult.riskLevels.riskRewardRatio,
+          marketPrice,
         },
       };
     } catch (error) {
-      logger.error("AI analysis failed:", error);
+      logger.error("Sophisticated AI analysis failed:", error);
       return {
         success: false,
         error: error instanceof Error ? error.message : "Unknown error",
@@ -451,7 +743,7 @@ export class BotEvaluationService {
         data: {
           userId,
           botId,
-          symbol: analysis.symbol || "UNKNOWN",
+          symbol: analysis.marketPrice?.symbol || analysis.symbol || "BTC/USD",
           timeframe: analysis.timeframe || "M1",
           chartUrl,
           decision: analysis.decision,
@@ -463,8 +755,8 @@ export class BotEvaluationService {
           stopLoss: analysis.stopLoss,
           takeProfit: analysis.takeProfit,
           marketPrice: analysis.marketPrice?.price,
-          aiResponse: analysis,
-          portfolioData: portfolioContext,
+          aiResponse: JSON.stringify(analysis),
+          portfolioData: JSON.stringify(portfolioContext),
           startDate: new Date(),
           success: true,
         },
@@ -479,6 +771,88 @@ export class BotEvaluationService {
   }
 
   /**
+   * Get historical candlestick data for technical analysis
+   */
+  private async getHistoricalCandleData(
+    symbol: string,
+    timeframe: string,
+    botId: string,
+    bars: number = 100,
+  ): Promise<CandleData[]> {
+    try {
+      logger.info(`📊 Getting historical candle data for ${symbol} (${timeframe})`);
+
+      // Get or create capital API instance
+      const bot = await prisma.bot.findUnique({
+        where: { id: botId },
+        include: { brokerCredential: true },
+      });
+
+      if (!bot?.brokerCredential?.credentials) {
+        throw new Error("No broker credentials found");
+      }
+
+      const credentials = credentialsEncryption.decryptCredentials(
+        bot.brokerCredential.credentials,
+      );
+      const cacheKey = `${botId}-${credentials.apiKey.slice(-8)}`;
+      let capitalApi = this.capitalApiInstances.get(cacheKey);
+
+      if (!capitalApi) {
+        const { CapitalMainService } = await import(
+          "../modules/capital/services/capital-main.service"
+        );
+        capitalApi = new CapitalMainService({
+          apiKey: credentials.apiKey,
+          identifier: credentials.identifier,
+          password: credentials.password,
+          isDemo: bot.brokerCredential.isDemo,
+          instanceId: `bot-${botId}`,
+        });
+        await capitalApi.authenticate();
+        this.capitalApiInstances.set(cacheKey, capitalApi);
+      }
+
+      // Get epic for symbol
+      const epic = await capitalApi.getEpicForSymbol(symbol);
+      if (!epic) {
+        throw new Error(`Could not find epic for symbol: ${symbol}`);
+      }
+
+      // Get historical data from Capital.com - REAL DATA ONLY
+      logger.info(`📊 Fetching ${bars} bars of ${timeframe} data for ${epic}`);
+      const historicalData = await capitalApi.getHistoricalPrices(epic, timeframe, bars);
+
+      if (!historicalData || historicalData.length === 0) {
+        throw new Error(`No historical data returned for ${epic} (${timeframe})`);
+      }
+
+      logger.info(`📊 Retrieved ${historicalData.length} real bars for ${symbol}`);
+
+      // Convert to CandleData format - Fix Capital.com data structure
+      const candleData: CandleData[] = historicalData.map((bar: any) => ({
+        open: parseFloat(bar.openPrice?.bid || bar.openPrice?.ask || bar.open || 0),
+        high: parseFloat(bar.highPrice?.bid || bar.highPrice?.ask || bar.high || 0),
+        low: parseFloat(bar.lowPrice?.bid || bar.lowPrice?.ask || bar.low || 0),
+        close: parseFloat(bar.closePrice?.bid || bar.closePrice?.ask || bar.close || 0),
+        volume: parseFloat(bar.lastTradedVolume || bar.volume || 0),
+        timestamp: new Date(bar.snapshotTimeUTC || bar.snapshotTime || bar.timestamp).getTime(),
+      }));
+
+      logger.info(`📊 Retrieved ${candleData.length} candles for technical analysis`);
+      return candleData;
+    } catch (error) {
+      logger.error(`❌ Failed to get historical candle data for ${symbol}:`, error);
+
+      // DO NOT USE FALLBACK DATA - throw error to identify real issues
+      logger.error(`❌ CRITICAL: Failed to get real historical data for ${symbol}:`, error);
+      throw new Error(
+        `Cannot get real market data for ${symbol}: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
+    }
+  }
+
+  /**
    * Execute trade based on AI analysis
    */
   private async executeTradeFromAnalysis(
@@ -486,6 +860,7 @@ export class BotEvaluationService {
     bot: any,
     analysis: any,
     evaluationId: string,
+    sharedCandleData?: CandleData[], // Optional shared data to avoid duplicate API calls
   ): Promise<TradeExecutionResult> {
     try {
       logger.info(`🔄 Executing trade for bot ${botId} based on AI analysis`);
@@ -498,38 +873,203 @@ export class BotEvaluationService {
         bot.brokerCredential.credentials,
       );
 
-      // Initialize Capital.com API
-      const capitalApi = new CapitalMainService({
-        apiKey: credentials.apiKey,
-        identifier: credentials.identifier,
-        password: credentials.password,
-        isDemo: bot.brokerCredential.isDemo,
-        instanceId: `bot-${botId}`,
-      });
+      // Reuse the same Capital API instance to avoid rate limiting
+      const cacheKey = `${botId}-${credentials.apiKey.slice(-8)}`;
+      let capitalApi = this.capitalApiInstances.get(cacheKey);
 
-      await capitalApi.authenticate();
+      if (!capitalApi) {
+        // Fallback: create new instance if somehow not cached
+        const { CapitalMainService } = await import(
+          "../modules/capital/services/capital-main.service"
+        );
+        capitalApi = new CapitalMainService({
+          apiKey: credentials.apiKey,
+          identifier: credentials.identifier,
+          password: credentials.password,
+          isDemo: bot.brokerCredential.isDemo,
+          instanceId: `bot-${botId}`,
+        });
+        await capitalApi.authenticate();
+        this.capitalApiInstances.set(cacheKey, capitalApi);
+        logger.info(`Created fallback Capital API instance for trade execution`);
+      } else {
+        logger.info(`Reusing cached Capital API instance for trade execution`);
+      }
 
-      // Get epic for symbol
-      const epic = await capitalApi.getEpicForSymbol(bot.tradingPairSymbol);
+      // Get epic for symbol - use trading format for execution
+      let epic = await capitalApi.getEpicForSymbol(bot.tradingPairSymbol);
       if (!epic) {
         throw new Error(`Could not find epic for symbol: ${bot.tradingPairSymbol}`);
+      }
+
+      // For crypto trading, we might need the full CFD epic format instead of simple format
+      if (epic === "BTCUSD" || epic === "ETHUSD" || epic === "LTCUSD") {
+        const tradingEpic = this.convertSymbolToTradingEpic(bot.tradingPairSymbol);
+        if (tradingEpic !== epic) {
+          logger.info(`Using trading epic format: ${epic} -> ${tradingEpic}`);
+          epic = tradingEpic;
+        }
+      }
+
+      // If trading epic doesn't work, search for the correct one
+      try {
+        // First, try to get market details to verify the epic exists for trading
+        await capitalApi.getMarketData(epic);
+        logger.info(`✅ Verified trading epic exists: ${epic}`);
+      } catch (verifyError: any) {
+        if (verifyError.message.includes("404")) {
+          logger.warn(
+            `❌ Trading epic ${epic} not found, searching for correct Bitcoin trading symbol...`,
+          );
+
+          // Search for Bitcoin trading markets
+          const markets = await capitalApi.searchMarkets("Bitcoin");
+          logger.info(
+            `Found ${markets.length} Bitcoin markets:`,
+            markets.map((m: any) => ({ epic: m.epic, name: m.instrumentName, symbol: m.symbol })),
+          );
+
+          // Look for tradeable Bitcoin market
+          const bitcoinMarket = markets.find(
+            (m: any) =>
+              (m.instrumentName?.toUpperCase().includes("BITCOIN") ||
+                m.instrumentName?.toUpperCase().includes("BTC")) &&
+              !m.instrumentName?.toUpperCase().includes("TEST"),
+          );
+
+          if (bitcoinMarket) {
+            logger.info(
+              `✅ Found correct Bitcoin trading epic: ${bitcoinMarket.epic} (${bitcoinMarket.instrumentName})`,
+            );
+            epic = bitcoinMarket.epic;
+          } else {
+            throw new Error(
+              `No tradeable Bitcoin market found. Available markets: ${markets.map((m: any) => m.instrumentName).join(", ")}`,
+            );
+          }
+        } else {
+          throw verifyError;
+        }
       }
 
       // Determine trade direction
       const direction =
         analysis.decision === "BUY" || analysis.decision === "EXECUTE_TRADE" ? "BUY" : "SELL";
 
-      // Execute the trade
+      logger.info(
+        `🔍 Direction Analysis: decision="${analysis.decision}", determined direction="${direction}"`,
+      );
+
+      // 🚀 SOPHISTICATED TRADING ANALYSIS - Replace simple percentage calculations
+      logger.info(`🧠 Starting sophisticated trading analysis...`);
+
+      // Use shared candlestick data if available, otherwise fetch new data
+      const candleData =
+        sharedCandleData ||
+        (await this.getHistoricalCandleData(
+          bot.tradingPairSymbol,
+          bot.timeframe,
+          botId,
+          400, // Get 400 bars for comprehensive analysis
+        ));
+
+      if (sharedCandleData) {
+        logger.info(
+          `🚀 Using shared candlestick data for trade execution (${candleData.length} bars) - API call avoided`,
+        );
+      }
+
+      // Get account balance for position sizing - NO FALLBACK
+      let accountBalance: number;
+      try {
+        const accountDetails = await capitalApi.getAccountDetails();
+        accountBalance = accountDetails.balance;
+
+        if (!accountBalance || accountBalance <= 0) {
+          throw new Error(`Invalid account balance: ${accountBalance}`);
+        }
+
+        logger.info(`💰 Real account balance: $${accountBalance}`);
+      } catch (error) {
+        logger.error(`❌ CRITICAL: Cannot get real account balance:`, error);
+        throw new Error(
+          `Cannot get real account balance: ${error instanceof Error ? error.message : "Unknown error"}`,
+        );
+      }
+
+      // Prepare parameters for sophisticated analysis
+      const sophisticatedParams: SophisticatedTradeParams = {
+        symbol: bot.tradingPairSymbol,
+        direction,
+        currentPrice: analysis.marketPrice?.price || 50000,
+        candleData,
+        timeframe: bot.timeframe,
+        accountBalance,
+        riskPercentage: 2.0, // 2% risk per trade
+        botMaxPositionSize: bot.maxPositionSize,
+        strategy: bot.strategy || "technical_analysis",
+      };
+
+      // Run sophisticated trading analysis
+      const sophisticatedResult: SophisticatedTradeResult =
+        await this.sophisticatedTradingAgent.analyzeTrade(sophisticatedParams);
+
+      // Check if the sophisticated analysis approves the trade
+      if (!sophisticatedResult.finalRecommendation.shouldTrade) {
+        logger.info(
+          `❌ Trade rejected by sophisticated analysis:`,
+          sophisticatedResult.finalRecommendation.reasoning,
+        );
+        return {
+          success: false,
+          error: `Trade rejected: ${sophisticatedResult.finalRecommendation.reasoning.join("; ")}`,
+        };
+      }
+
+      // Use sophisticated analysis results
+      const finalStopLoss = sophisticatedResult.finalRecommendation.stopLoss;
+      const finalTakeProfit = sophisticatedResult.finalRecommendation.takeProfit;
+      const sophisticatedPositionSize = sophisticatedResult.finalRecommendation.positionSize;
+
+      logger.info(`🎯 Sophisticated Analysis Results:`, {
+        direction,
+        stopLoss: finalStopLoss,
+        takeProfit: finalTakeProfit,
+        positionSize: sophisticatedPositionSize,
+        confidence: `${(sophisticatedResult.finalRecommendation.confidence * 100).toFixed(1)}%`,
+        riskRewardRatio: `${sophisticatedResult.riskLevels.riskRewardRatio.toFixed(2)}:1`,
+        technicalTrend: sophisticatedResult.technicalAnalysis.trend,
+        atr: sophisticatedResult.technicalAnalysis.atr.toFixed(2),
+      });
+
+      // Execute the trade with sophisticated position sizing
+      const tradePositionSize = Math.min(sophisticatedPositionSize, bot.maxPositionSize);
+      logger.info(
+        `🚀 Executing trade: ${direction} ${tradePositionSize} units of ${bot.tradingPairSymbol}`,
+      );
+
       const result = await capitalApi.createPosition(
         epic,
         direction,
-        analysis.recommendedPositionSize || bot.maxPositionSize,
-        analysis.stopLoss,
-        analysis.takeProfit,
+        tradePositionSize,
+        finalStopLoss,
+        finalTakeProfit,
       );
 
+      // Log the full API response for debugging
+      logger.info(`Capital.com API Response:`, JSON.stringify(result, null, 2));
+      console.log("📥 Capital.com API Response:", result);
+
       if (result.dealStatus === "ACCEPTED") {
-        // Create trade record
+        // Create trade record with sophisticated analysis data
+        const sophisticatedReasoning = [
+          `Sophisticated Analysis: ${sophisticatedResult.finalRecommendation.reasoning.join("; ")}`,
+          `Technical: ${sophisticatedResult.technicalAnalysis.trend} trend (ATR: ${sophisticatedResult.technicalAnalysis.atr.toFixed(2)})`,
+          `Risk/Reward: ${sophisticatedResult.riskLevels.riskRewardRatio.toFixed(2)}:1`,
+          `Position Quality: ${(sophisticatedResult.positionSizing.confidence * 100).toFixed(1)}%`,
+          `Original AI: ${analysis.reasoning}`,
+        ].join(" | ");
+
         const trade = await prisma.trade.create({
           data: {
             userId: bot.userId,
@@ -537,18 +1077,54 @@ export class BotEvaluationService {
             symbol: bot.tradingPairSymbol,
             side: direction,
             type: "MARKET",
-            size: analysis.recommendedPositionSize || bot.maxPositionSize,
+            size: tradePositionSize,
             entryPrice: analysis.marketPrice?.price,
-            stopLoss: analysis.stopLoss,
-            takeProfit: analysis.takeProfit,
+            stopLoss: finalStopLoss,
+            takeProfit: finalTakeProfit,
             status: "FILLED",
             brokerOrderId: result.dealReference,
             brokerTradeId: result.dealId,
-            reason: analysis.reasoning,
-            confidence: analysis.confidence,
+            reason: sophisticatedReasoning,
+            confidence: sophisticatedResult.finalRecommendation.confidence,
             evaluationId,
             openedAt: new Date(),
           },
+        });
+
+        // Debug logging for sophisticated trade analysis
+        logger.info(`💰 Sophisticated Trade Record Created:`, {
+          tradeId: trade.id,
+          direction,
+          stopLoss: finalStopLoss,
+          takeProfit: finalTakeProfit,
+          positionSize: tradePositionSize,
+          sophisticatedAnalysis: {
+            technicalTrend: sophisticatedResult.technicalAnalysis.trend,
+            atr: sophisticatedResult.technicalAnalysis.atr.toFixed(2),
+            riskRewardRatio: sophisticatedResult.riskLevels.riskRewardRatio.toFixed(2),
+            overallConfidence: `${(sophisticatedResult.finalRecommendation.confidence * 100).toFixed(1)}%`,
+            positionAdjustment: `${(sophisticatedResult.positionSizing.adjustmentFactor * 100).toFixed(1)}%`,
+          },
+          originalAI: {
+            stopLoss: analysis.stopLoss,
+            takeProfit: analysis.takeProfit,
+            confidence: analysis.confidence,
+          },
+          capitalResponse: {
+            hasLimitLevel: result.limitLevel !== undefined,
+            limitLevel: result.limitLevel,
+          },
+        });
+
+        // Enhanced debugging for sophisticated analysis
+        console.log(`🧠 SOPHISTICATED TRADE DEBUG:`, {
+          sent_stopLoss: finalStopLoss,
+          sent_takeProfit: finalTakeProfit,
+          sent_positionSize: tradePositionSize,
+          capital_response_limitLevel: result.limitLevel,
+          technical_analysis: `${sophisticatedResult.technicalAnalysis.trend} (ATR: ${sophisticatedResult.technicalAnalysis.atr.toFixed(2)})`,
+          risk_management: `${sophisticatedResult.riskLevels.riskRewardRatio.toFixed(2)}:1 R/R`,
+          position_quality: `${(sophisticatedResult.positionSizing.confidence * 100).toFixed(1)}% confidence`,
         });
 
         // Update bot statistics
@@ -574,7 +1150,16 @@ export class BotEvaluationService {
           },
         };
       } else {
-        throw new Error(`Trade execution rejected: ${result.reason || "Unknown reason"}`);
+        // Enhanced error reporting with full response details
+        const errorDetails = {
+          status: result.dealStatus,
+          reason: result.reason,
+          fullResponse: result,
+        };
+        logger.error(`❌ Trade rejected by Capital.com:`, errorDetails);
+        throw new Error(
+          `Trade execution rejected: Status=${result.dealStatus}, Reason=${result.reason || "None provided"}, Details=${JSON.stringify(result)}`,
+        );
       }
     } catch (error) {
       logger.error(`❌ Trade execution failed for bot ${botId}:`, error);
@@ -621,6 +1206,69 @@ export class BotEvaluationService {
   async createEvaluation(botId: string, userId: string, chartData: any): Promise<any> {
     logger.info(`Creating evaluation for bot ${botId}`);
     return await this.evaluateBot(botId);
+  }
+
+  /**
+   * Adjust stop loss and take profit based on timeframe for more appropriate risk management
+   */
+  private adjustStopLossTakeProfitForTimeframe(
+    originalStopLoss: number,
+    originalTakeProfit: number,
+    currentPrice: number,
+    timeframe: string,
+    direction: "BUY" | "SELL",
+  ): { stopLoss: number; takeProfit: number } {
+    if (!currentPrice || currentPrice <= 0) {
+      return { stopLoss: originalStopLoss, takeProfit: originalTakeProfit };
+    }
+
+    // Timeframe-specific risk percentages (much tighter for shorter timeframes)
+    const timeframeRisk: { [key: string]: { stopPercent: number; profitPercent: number } } = {
+      M1: { stopPercent: 0.3, profitPercent: 0.5 }, // 1 minute: very tight
+      M5: { stopPercent: 0.5, profitPercent: 0.8 }, // 5 minutes: tight
+      M15: { stopPercent: 0.8, profitPercent: 1.2 }, // 15 minutes: moderate
+      M30: { stopPercent: 1.0, profitPercent: 1.5 }, // 30 minutes: moderate
+      H1: { stopPercent: 1.5, profitPercent: 2.0 }, // 1 hour: looser
+      H4: { stopPercent: 2.0, profitPercent: 3.0 }, // 4 hours: original
+      D1: { stopPercent: 2.0, profitPercent: 3.0 }, // 1 day: original
+    };
+
+    const riskConfig = timeframeRisk[timeframe] || timeframeRisk.H4; // Default to H4 if unknown
+
+    let adjustedStopLoss: number;
+    let adjustedTakeProfit: number;
+
+    if (direction === "BUY") {
+      // For BUY: stop below current price, profit above
+      adjustedStopLoss = currentPrice * (1 - riskConfig.stopPercent / 100);
+      adjustedTakeProfit = currentPrice * (1 + riskConfig.profitPercent / 100);
+    } else {
+      // For SELL: stop above current price, profit below
+      adjustedStopLoss = currentPrice * (1 + riskConfig.stopPercent / 100);
+      adjustedTakeProfit = currentPrice * (1 - riskConfig.profitPercent / 100);
+    }
+
+    // Ensure minimum distance for Capital.com (typically around 0.1% for major pairs)
+    const minDistance = currentPrice * 0.001; // 0.1% minimum
+
+    if (Math.abs(adjustedStopLoss - currentPrice) < minDistance) {
+      adjustedStopLoss =
+        direction === "BUY" ? currentPrice - minDistance : currentPrice + minDistance;
+    }
+
+    if (Math.abs(adjustedTakeProfit - currentPrice) < minDistance) {
+      adjustedTakeProfit =
+        direction === "BUY" ? currentPrice + minDistance : currentPrice - minDistance;
+    }
+
+    logger.info(
+      `📊 Timeframe Risk Adjustment (${timeframe}): Stop ${riskConfig.stopPercent}%, Profit ${riskConfig.profitPercent}%`,
+    );
+
+    return {
+      stopLoss: adjustedStopLoss,
+      takeProfit: adjustedTakeProfit,
+    };
   }
 }
 

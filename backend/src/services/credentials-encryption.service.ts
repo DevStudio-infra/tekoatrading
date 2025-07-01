@@ -27,8 +27,7 @@ export class CredentialsEncryptionService {
       // Encrypt using AES-256-CBC
       const iv = crypto.randomBytes(16);
       const key = crypto.createHash("sha256").update(this.encryptionKey).digest().slice(0, 32);
-      const cipher = crypto.createCipher("aes-256-cbc", key);
-      cipher.setEncoding("hex");
+      const cipher = crypto.createCipheriv("aes-256-cbc", key, iv);
 
       // Convert credentials to string and encrypt
       const stringifiedCredentials = JSON.stringify(credentials);
@@ -71,7 +70,7 @@ export class CredentialsEncryptionService {
       const key = crypto.createHash("sha256").update(this.encryptionKey).digest().slice(0, 32);
 
       // Decrypt
-      const decipher = crypto.createDecipher("aes-256-cbc", key);
+      const decipher = crypto.createDecipheriv("aes-256-cbc", key, iv);
       let decrypted = decipher.update(encrypted, "hex", "utf8");
       decrypted += decipher.final("utf8");
 

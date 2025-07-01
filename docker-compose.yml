@@ -47,7 +47,7 @@ services:
       context: ./chart-engine
       dockerfile: Dockerfile
     ports:
-      - "8000:8000"
+      - "5001:5001"
     volumes:
       - ./chart-engine:/app
 

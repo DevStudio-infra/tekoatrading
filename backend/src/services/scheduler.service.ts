@@ -19,6 +19,12 @@ export class SchedulerService {
   private jobs: Map<string, BotJob> = new Map();
   private isRunning: boolean = false;
   private currentlyRunningBots: Set<string> = new Set();
+  private tradeMonitoringInterval: NodeJS.Timeout | null = null;
+  private statusInterval: NodeJS.Timeout | null = null;
+
+  // Trade monitoring interval (every 30 seconds for active management)
+  private readonly TRADE_MONITORING_INTERVAL = 30 * 1000;
+  private readonly STATUS_REPORTING_INTERVAL = 60 * 1000; // 1 minute
 
   static getInstance(): SchedulerService {
     if (!SchedulerService.instance) {
@@ -39,6 +45,12 @@ export class SchedulerService {
     // Load and schedule active bots
     await this.loadAndScheduleActiveBots();
 
+    // Start continuous trade monitoring
+    this.startTradeMonitoring();
+
+    // Start status reporting
+    this.startStatusReporting();
+
     logger.info("✅ Bot scheduler started successfully");
   }
 
@@ -54,6 +66,17 @@ export class SchedulerService {
       if (job.timeoutId) {
         clearTimeout(job.timeoutId);
       }
+    }
+
+    // Stop monitoring intervals
+    if (this.tradeMonitoringInterval) {
+      clearInterval(this.tradeMonitoringInterval);
+      this.tradeMonitoringInterval = null;
+    }
+
+    if (this.statusInterval) {
+      clearInterval(this.statusInterval);
+      this.statusInterval = null;
     }
 
     this.jobs.clear();
@@ -150,8 +173,9 @@ export class SchedulerService {
     } finally {
       this.currentlyRunningBots.delete(botId);
 
-      // Schedule next run
+      // CRITICAL FIX: Always reschedule (success OR error) for continuous operation
       if (this.jobs.has(botId) && this.isRunning) {
+        logger.info(`🔄 Rescheduling bot ${botId} for next run (continuous operation)`);
         this.scheduleNextRun(botId, 0);
       }
     }
@@ -219,6 +243,7 @@ export class SchedulerService {
 
   private getIntervalInMs(interval: string): number {
     const intervalMap: Record<string, number> = {
+      // Standard formats
       "1m": 60 * 1000, // 1 minute
       "5m": 5 * 60 * 1000, // 5 minutes
       "15m": 15 * 60 * 1000, // 15 minutes
@@ -226,6 +251,14 @@ export class SchedulerService {
       "1H": 60 * 60 * 1000, // 1 hour
       "4H": 4 * 60 * 60 * 1000, // 4 hours
       "1D": 24 * 60 * 60 * 1000, // 1 day
+      // TradingView/Capital.com formats (M1, M5, etc.)
+      M1: 60 * 1000, // 1 minute
+      M5: 5 * 60 * 1000, // 5 minutes
+      M15: 15 * 60 * 1000, // 15 minutes
+      M30: 30 * 60 * 1000, // 30 minutes
+      H1: 60 * 60 * 1000, // 1 hour
+      H4: 4 * 60 * 60 * 1000, // 4 hours
+      D1: 24 * 60 * 60 * 1000, // 1 day
     };
 
     return intervalMap[interval] || intervalMap["1H"]; // Default to 1 hour
@@ -279,6 +312,66 @@ export class SchedulerService {
       const nextRun = job.timeoutId ? "Scheduled" : "Not scheduled";
       logger.info(`  - Bot ${botId} (${job.interval}): Last run: ${lastRun}, Next: ${nextRun}`);
     }
+  }
+
+  /**
+   * Start trade monitoring for continuous operation
+   */
+  private startTradeMonitoring(): void {
+    if (this.tradeMonitoringInterval) {
+      return; // Already monitoring
+    }
+
+    logger.info("🔍 Starting trade monitoring...");
+
+    this.tradeMonitoringInterval = setInterval(async () => {
+      try {
+        // Simple check to ensure scheduler is still responsive
+        if (this.isRunning && this.jobs.size > 0) {
+          logger.debug(
+            `📊 Trade monitoring: ${this.jobs.size} bots scheduled, ${this.currentlyRunningBots.size} running`,
+          );
+        }
+      } catch (error) {
+        logger.error("❌ Trade monitoring error:", error);
+      }
+    }, this.TRADE_MONITORING_INTERVAL);
+
+    logger.info("✅ Trade monitoring started");
+  }
+
+  /**
+   * Start status reporting for continuous operation
+   */
+  private startStatusReporting(): void {
+    if (this.statusInterval) {
+      return; // Already reporting
+    }
+
+    logger.info("📊 Starting status reporting...");
+
+    this.statusInterval = setInterval(() => {
+      try {
+        if (this.isRunning) {
+          const activeJobs = this.jobs.size;
+          const runningBots = this.currentlyRunningBots.size;
+
+          if (activeJobs > 0 || runningBots > 0) {
+            logger.info(`🤖 Scheduler Status: ${activeJobs} scheduled, ${runningBots} running`);
+
+            // Log detailed status every 5 minutes
+            const now = new Date();
+            if (now.getMinutes() % 5 === 0) {
+              this.logActiveJobs();
+            }
+          }
+        }
+      } catch (error) {
+        logger.error("❌ Status reporting error:", error);
+      }
+    }, this.STATUS_REPORTING_INTERVAL);
+
+    logger.info("✅ Status reporting started");
   }
 }
 

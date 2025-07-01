@@ -63,11 +63,27 @@ export class RiskAssessmentAgent {
 
       // Calculate position size based on account balance and risk tolerance
       const riskPercentage = 0.02; // 2% risk per trade
-      const basePositionSize = balance * riskPercentage;
+      const riskAmountUSD = balance * riskPercentage; // USD amount to risk
+
+      // Convert USD risk amount to actual units of the asset
+      const basePositionSize = riskAmountUSD / currentPrice; // Convert USD to asset units
 
       // Adjust for existing positions (reduce risk if many positions open)
       const positionAdjustment = Math.max(0.5, 1 - openPositions * 0.1);
       const recommendedPositionSize = basePositionSize * positionAdjustment;
+
+      // Apply crypto-specific limits to prevent position size errors
+      let finalPositionSize = recommendedPositionSize;
+      if (currentPrice > 50000) {
+        // Bitcoin: max 0.01 BTC for safety
+        finalPositionSize = Math.min(recommendedPositionSize, 0.01);
+      } else if (currentPrice > 10000) {
+        // High-value crypto: max 0.1 units
+        finalPositionSize = Math.min(recommendedPositionSize, 0.1);
+      } else if (currentPrice > 1000) {
+        // Medium-value crypto: max 1.0 units
+        finalPositionSize = Math.min(recommendedPositionSize, 1.0);
+      }
 
       // Calculate stop loss and take profit based on technical analysis
       const stopLoss = params.technicalAnalysis?.support || currentPrice * 0.98;
@@ -86,9 +102,15 @@ export class RiskAssessmentAgent {
 
       riskScore = Math.min(5, Math.max(1, riskScore));
 
+      console.log(`💰 Position Size Calculation:
+        - Risk Amount: $${riskAmountUSD.toFixed(2)} (${riskPercentage * 100}% of $${balance})
+        - Asset Price: $${currentPrice.toFixed(2)}
+        - Raw Position Size: ${recommendedPositionSize.toFixed(6)} units
+        - Final Position Size: ${finalPositionSize.toFixed(6)} units`);
+
       return {
         riskScore: Number(riskScore.toFixed(1)),
-        recommendedPositionSize: Number(recommendedPositionSize.toFixed(0)),
+        recommendedPositionSize: Number(finalPositionSize.toFixed(6)),
         stopLoss: Number(stopLoss.toFixed(5)),
         takeProfit: Number(takeProfit.toFixed(5)),
         riskReward: Number(riskReward.toFixed(2)),
@@ -158,14 +180,24 @@ export class TradingDecisionAgent {
 
       confidence = Math.max(0, Math.min(100, confidence));
 
+      // Fix stop loss and take profit based on trade direction
+      let finalStopLoss = risk?.stopLoss;
+      let finalTakeProfit = risk?.takeProfit;
+
+      if (decision === "SELL") {
+        // For SELL positions: stop loss should be above current price, take profit below
+        finalStopLoss = risk?.takeProfit; // Use resistance as stop loss
+        finalTakeProfit = risk?.stopLoss; // Use support as take profit
+      }
+
       return {
         decision,
         confidence,
         reasoning,
         priority,
         quantity: risk?.recommendedPositionSize || 100,
-        stopLoss: risk?.stopLoss,
-        takeProfit: risk?.takeProfit,
+        stopLoss: finalStopLoss,
+        takeProfit: finalTakeProfit,
         riskReward: risk?.riskReward,
         timestamp: new Date().toISOString(),
       };

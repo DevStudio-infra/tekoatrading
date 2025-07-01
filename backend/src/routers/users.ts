@@ -12,8 +12,6 @@ export const usersRouter = router({
         id: ctx.user.id,
         email: ctx.user.email,
         name: ctx.user.name,
-        firstName: ctx.user.firstName,
-        lastName: ctx.user.lastName,
         clerkId: ctx.user.clerkId,
         createdAt: ctx.user.createdAt,
         updatedAt: ctx.user.updatedAt,
@@ -41,8 +39,6 @@ export const usersRouter = router({
           data: {
             clerkId: input.clerkId,
             email: input.email,
-            firstName: input.firstName,
-            lastName: input.lastName,
             name: input.name || `${input.firstName || ""} ${input.lastName || ""}`.trim(),
           },
         });
@@ -70,11 +66,7 @@ export const usersRouter = router({
         const updatedUser = await prisma.user.update({
           where: { id: ctx.user.id },
           data: {
-            firstName: input.firstName,
-            lastName: input.lastName,
-            name:
-              input.name ||
-              `${input.firstName || ctx.user.firstName || ""} ${input.lastName || ctx.user.lastName || ""}`.trim(),
+            name: input.name || `${input.firstName || ""} ${input.lastName || ""}`.trim(),
             email: input.email,
           },
         });
@@ -161,8 +153,6 @@ export const usersRouter = router({
       return {
         id: ctx.user.id,
         email: ctx.user.email,
-        firstName: ctx.user.firstName,
-        lastName: ctx.user.lastName,
         name: ctx.user.name,
         clerkId: ctx.user.clerkId,
       };
@@ -186,9 +176,7 @@ export const usersRouter = router({
         const updatedUser = await prisma.user.update({
           where: { id: ctx.user.id },
           data: {
-            firstName: input.firstName,
-            lastName: input.lastName,
-            name: `${input.firstName || ctx.user.firstName || ""} ${input.lastName || ctx.user.lastName || ""}`.trim(),
+            name: `${input.firstName || ""} ${input.lastName || ""}`.trim(),
             email: input.email,
           },
         });
@@ -199,8 +187,6 @@ export const usersRouter = router({
           user: {
             id: updatedUser.id,
             email: updatedUser.email,
-            firstName: updatedUser.firstName,
-            lastName: updatedUser.lastName,
             name: updatedUser.name,
           },
         };
@@ -232,8 +218,6 @@ export const usersRouter = router({
             where: { clerkId: input.clerkId },
             data: {
               email: input.email,
-              firstName: input.firstName,
-              lastName: input.lastName,
               name: `${input.firstName || ""} ${input.lastName || ""}`.trim(),
             },
           });
@@ -245,8 +229,6 @@ export const usersRouter = router({
           data: {
             clerkId: input.clerkId,
             email: input.email,
-            firstName: input.firstName,
-            lastName: input.lastName,
             name: `${input.firstName || ""} ${input.lastName || ""}`.trim(),
           },
         });
@@ -256,6 +238,76 @@ export const usersRouter = router({
       } catch (error) {
         logger.error("Error finding or creating user:", error);
         throw new Error("Failed to process user");
+      }
+    }),
+
+  // Create user from webhook (public)
+  createFromWebhook: publicProcedure
+    .input(
+      z.object({
+        clerkId: z.string(),
+        email: z.string().email(),
+        firstName: z.string().optional(),
+        lastName: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      try {
+        const user = await prisma.user.upsert({
+          where: { clerkId: input.clerkId },
+          update: {
+            email: input.email,
+            name: `${input.firstName || ""} ${input.lastName || ""}`.trim(),
+          },
+          create: {
+            clerkId: input.clerkId,
+            email: input.email,
+            name: `${input.firstName || ""} ${input.lastName || ""}`.trim(),
+          },
+        });
+
+        logger.info(`User upserted from webhook: ${user.id} (Clerk ID: ${input.clerkId})`);
+        return user;
+      } catch (error) {
+        logger.error("Error creating/updating user from webhook:", error);
+        throw new Error("Failed to process webhook user");
+      }
+    }),
+
+  // Check if user exists by clerkId (public)
+  existsByClerkId: publicProcedure
+    .input(z.object({ clerkId: z.string() }))
+    .query(async ({ input }) => {
+      try {
+        const user = await prisma.user.findUnique({
+          where: { clerkId: input.clerkId },
+          select: { id: true, email: true },
+        });
+
+        return { exists: !!user, user: user || null };
+      } catch (error) {
+        logger.error("Error checking user existence:", error);
+        return { exists: false, user: null };
+      }
+    }),
+
+  // Get user by clerkId (public - for webhook usage)
+  getByClerkId: publicProcedure
+    .input(z.object({ clerkId: z.string() }))
+    .query(async ({ input }) => {
+      try {
+        const user = await prisma.user.findUnique({
+          where: { clerkId: input.clerkId },
+        });
+
+        if (!user) {
+          throw new Error("User not found");
+        }
+
+        return user;
+      } catch (error) {
+        logger.error("Error fetching user by Clerk ID:", error);
+        throw new Error("Failed to fetch user");
       }
     }),
 });

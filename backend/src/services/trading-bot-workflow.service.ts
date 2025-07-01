@@ -5,8 +5,8 @@
 
 import { logger } from "../logger";
 import { prisma } from "../prisma";
-import { TradingDecisionAgent } from "../ai/trading-decision-agent";
 import { EnhancedTradingDecisionAgent } from "../ai/enhanced-trading-decision-agent";
+import { SophisticatedTradingAgent } from "../agents/trading/sophisticated-trading.agent";
 
 export interface BotWorkflowResult {
   success: boolean;
@@ -33,11 +33,11 @@ export interface AccountData {
 }
 
 export class TradingBotWorkflowService {
-  private tradingAgent: TradingDecisionAgent;
+  private sophisticatedAgent: SophisticatedTradingAgent;
   private enhancedAgent: EnhancedTradingDecisionAgent;
 
   constructor() {
-    this.tradingAgent = new TradingDecisionAgent();
+    this.sophisticatedAgent = new SophisticatedTradingAgent();
     this.enhancedAgent = new EnhancedTradingDecisionAgent();
   }
 
@@ -142,10 +142,13 @@ export class TradingBotWorkflowService {
         throw new Error(error);
       }
 
-      // Parse the encrypted credentials
+      // Decrypt and parse the credentials
       let credentialsData;
       try {
-        credentialsData = JSON.parse(bot.brokerCredential.credentials);
+        const { credentialsEncryption } = await import("./credentials-encryption.service");
+        credentialsData = credentialsEncryption.decryptCredentials(
+          bot.brokerCredential.credentials,
+        );
       } catch (error) {
         const errorMsg = `❌ CREDENTIAL PARSING FAILED: Bot ${botId} broker credentials are corrupted. Please re-configure broker credentials.`;
         logger.error(errorMsg, error);
@@ -171,18 +174,14 @@ export class TradingBotWorkflowService {
       const capitalApi = getCapitalApiInstance(config);
       await capitalApi.authenticate();
 
-      // Convert symbol to epic format
-      const epic = this.convertSymbolToEpic(symbol);
+      // Get historical data for volume and 24h stats (last 24 hours)
+      // Note: Capital.com API doesn't support date filtering, returns recent data
+      const historicalPrices = await capitalApi.getHistoricalPrices(symbol, "HOUR", 24);
 
-      // Get current market data
+      // For the latest price and market data, we still need the epic
+      const epic = this.convertSymbolToEpic(symbol);
       const latestPrice = await capitalApi.getLatestPrice(epic);
       const marketData = await capitalApi.getMarketData(epic);
-
-      // Get historical data for volume and 24h stats
-      const to = new Date().toISOString();
-      const from = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(); // 24 hours ago
-
-      const historicalPrices = await capitalApi.getHistoricalPrices(epic, "HOUR", from, to);
 
       let high24h = latestPrice.bid;
       let low24h = latestPrice.bid;
@@ -222,25 +221,75 @@ export class TradingBotWorkflowService {
   }
 
   /**
-   * Convert symbol to Capital.com epic format
+   * Convert symbol to Capital.com epic format with proper mappings
+   * Using working format from capital-main.service.ts
    */
   private convertSymbolToEpic(symbol: string): string {
     const symbolMappings: { [key: string]: string } = {
-      BTCUSD: "BITCOIN",
-      ETHUSD: "ETHEREUM",
-      EURUSD: "EURUSD",
-      GBPUSD: "GBPUSD",
-      USDJPY: "USDJPY",
-      AUDUSD: "AUDUSD",
-      USDCAD: "USDCAD",
-      USDCHF: "USDCHF",
-      NZDUSD: "NZDUSD",
-      EURGBP: "EURGBP",
-      EURJPY: "EURJPY",
-      GBPJPY: "GBPJPY",
+      // Cryptocurrency pairs - SIMPLE FORMAT (WORKING!)
+      BTC: "BTCUSD",
+      "BTC/USD": "BTCUSD",
+      BITCOIN: "BTCUSD",
+      BTCUSD: "BTCUSD",
+
+      ETH: "ETHUSD",
+      "ETH/USD": "ETHUSD",
+      ETHEREUM: "ETHUSD",
+      ETHUSD: "ETHUSD",
+
+      LTC: "LTCUSD",
+      "LTC/USD": "LTCUSD",
+      LITECOIN: "LTCUSD",
+      LTCUSD: "LTCUSD",
+
+      // Forex pairs - CORRECT Capital.com epic formats
+      "EUR/USD": "CS.D.EURUSD.MINI.IP",
+      EURUSD: "CS.D.EURUSD.MINI.IP",
+
+      "GBP/USD": "CS.D.GBPUSD.MINI.IP",
+      GBPUSD: "CS.D.GBPUSD.MINI.IP",
+
+      "USD/JPY": "CS.D.USDJPY.MINI.IP",
+      USDJPY: "CS.D.USDJPY.MINI.IP",
+
+      "AUD/USD": "CS.D.AUDUSD.MINI.IP",
+      AUDUSD: "CS.D.AUDUSD.MINI.IP",
+
+      "USD/CAD": "CS.D.USDCAD.MINI.IP",
+      USDCAD: "CS.D.USDCAD.MINI.IP",
+
+      "USD/CHF": "CS.D.USDCHF.MINI.IP",
+      USDCHF: "CS.D.USDCHF.MINI.IP",
+
+      "NZD/USD": "CS.D.NZDUSD.MINI.IP",
+      NZDUSD: "CS.D.NZDUSD.MINI.IP",
+
+      "EUR/GBP": "CS.D.EURGBP.MINI.IP",
+      EURGBP: "CS.D.EURGBP.MINI.IP",
+
+      "EUR/JPY": "CS.D.EURJPY.MINI.IP",
+      EURJPY: "CS.D.EURJPY.MINI.IP",
+
+      "GBP/JPY": "CS.D.GBPJPY.MINI.IP",
+      GBPJPY: "CS.D.GBPJPY.MINI.IP",
+
+      // Commodities
+      GOLD: "CS.D.CFEGOLD.CFD.IP",
+      "XAU/USD": "CS.D.CFEGOLD.CFD.IP",
+      XAUUSD: "CS.D.CFEGOLD.CFD.IP",
+
+      SILVER: "CS.D.CFESILVER.CFD.IP",
+      "XAG/USD": "CS.D.CFESILVER.CFD.IP",
+      XAGUSD: "CS.D.CFESILVER.CFD.IP",
+
+      OIL: "CS.D.CFEOIL.CFD.IP",
+      CRUDE: "CS.D.CFEOIL.CFD.IP",
+      WTI: "CS.D.CFEOIL.CFD.IP",
     };
 
-    return symbolMappings[symbol.toUpperCase()] || symbol;
+    const epic = symbolMappings[symbol.toUpperCase()] || symbol;
+    logger.info(`Symbol mapping: ${symbol} -> ${epic}`);
+    return epic;
   }
 
   /**
@@ -262,10 +311,13 @@ export class TradingBotWorkflowService {
         throw new Error(error);
       }
 
-      // Parse the encrypted credentials
+      // Decrypt and parse the credentials
       let credentialsData;
       try {
-        credentialsData = JSON.parse(bot.brokerCredential.credentials);
+        const { credentialsEncryption } = await import("./credentials-encryption.service");
+        credentialsData = credentialsEncryption.decryptCredentials(
+          bot.brokerCredential.credentials,
+        );
       } catch (error) {
         const errorMsg = `❌ CREDENTIAL PARSING FAILED: Bot ${botId} broker credentials are corrupted.`;
         logger.error(errorMsg, error);

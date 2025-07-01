@@ -234,8 +234,6 @@ export class MarketDataService extends EventEmitter {
         throw new Error("Market data service not initialized");
       }
 
-      const epic = (await this.capitalApi.getEpicForSymbol(symbol)) || symbol;
-
       // Map timeframe to Capital.com resolution
       const resolutionMap: Record<string, string> = {
         M1: "MINUTE",
@@ -249,14 +247,39 @@ export class MarketDataService extends EventEmitter {
 
       const resolution = resolutionMap[timeframe] || "HOUR";
 
-      const fromStr = from.toISOString();
-      const toStr = to.toISOString();
+      // Capital.com API doesn't support date filtering, calculate approximate number of data points needed
+      const diffHours = Math.ceil((to.getTime() - from.getTime()) / (1000 * 60 * 60));
+      let maxPoints = 100; // Default
+
+      // Estimate data points based on resolution and time range
+      switch (resolution) {
+        case "MINUTE":
+          maxPoints = Math.min(diffHours * 60, 500); // Max 500 minutes
+          break;
+        case "MINUTE_5":
+          maxPoints = Math.min(diffHours * 12, 500); // Max 500 5-minute candles
+          break;
+        case "MINUTE_15":
+          maxPoints = Math.min(diffHours * 4, 500); // Max 500 15-minute candles
+          break;
+        case "MINUTE_30":
+          maxPoints = Math.min(diffHours * 2, 500); // Max 500 30-minute candles
+          break;
+        case "HOUR":
+          maxPoints = Math.min(diffHours, 500); // Max 500 hourly candles
+          break;
+        case "HOUR_4":
+          maxPoints = Math.min(Math.ceil(diffHours / 4), 500); // Max 500 4-hour candles
+          break;
+        case "DAY":
+          maxPoints = Math.min(Math.ceil(diffHours / 24), 365); // Max 365 daily candles
+          break;
+      }
 
       const historicalData = await this.capitalApi.getHistoricalPrices(
-        epic,
+        symbol,
         resolution as any,
-        fromStr,
-        toStr,
+        maxPoints,
       );
 
       // Convert to OHLCV format

@@ -1,6 +1,6 @@
 import { router, publicProcedure } from "../trpc";
 import { z } from "zod";
-import { TradingDecisionAgent } from "../ai/trading-decision-agent";
+import { EnhancedTradingDecisionAgent } from "../ai/enhanced-trading-decision-agent";
 
 // Define the return type inline to avoid export issues
 type AnalysisResult = {
@@ -12,12 +12,12 @@ type AnalysisResult = {
 };
 
 // Lazy-load the trading agent to handle missing API keys gracefully
-let tradingAgent: TradingDecisionAgent | null = null;
+let tradingAgent: EnhancedTradingDecisionAgent | null = null;
 
 function getTradingAgent() {
   if (!tradingAgent) {
     try {
-      tradingAgent = new TradingDecisionAgent();
+      tradingAgent = new EnhancedTradingDecisionAgent();
     } catch (error) {
       console.warn("Trading agent initialization failed:", error);
       return null;
@@ -68,7 +68,11 @@ export const aiRouter = router({
         marketVolatility: input.marketVolatility,
       };
 
-      const result = await agent.analyze({ marketData, riskData });
+      const result = await agent.analyze({
+        symbol: input.symbol,
+        marketData,
+        riskData,
+      });
 
       return {
         decision: result.action.toUpperCase(),
@@ -110,7 +114,11 @@ export const aiRouter = router({
           marketVolatility: 10,
         };
 
-        const analysis = await agent.analyze({ marketData, riskData });
+        const analysis = await agent.analyze({
+          symbol: input.symbol,
+          marketData,
+          riskData,
+        });
 
         // Derive sentiment from AI analysis
         let sentiment = "neutral";

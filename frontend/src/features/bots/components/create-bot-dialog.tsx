@@ -33,12 +33,12 @@ const createBotSchema = z
     name: z.string().min(1, "Bot name is required"),
     description: z.string().optional(),
     tradingPairSymbol: z.string().min(1, "Trading pair is required"),
-    timeframe: z.enum(["M1", "M5", "M15", "M30", "H1", "H4", "D1"]).default("M1"),
-    maxOpenTrades: z.number().min(1).max(10).default(4),
-    minRiskPercentage: z.number().min(0.1).max(10).default(0.5),
-    maxRiskPercentage: z.number().min(0.1).max(10).default(2),
+    timeframe: z.enum(["M1", "M5", "M15", "M30", "H1", "H4", "D1"]),
+    maxOpenTrades: z.number().min(1).max(10),
+    minRiskPercentage: z.number().min(0.1).max(10),
+    maxRiskPercentage: z.number().min(0.1).max(10),
     brokerCredentialId: z.string().min(1, "Broker credential is required"),
-    isAiTradingActive: z.boolean().default(false),
+    isAiTradingActive: z.boolean(),
   })
   .refine((data) => data.maxRiskPercentage > data.minRiskPercentage, {
     message: "Max risk percentage must be greater than min risk percentage",
