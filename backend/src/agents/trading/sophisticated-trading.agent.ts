@@ -65,11 +65,11 @@ export class SophisticatedTradingAgent extends BaseAgent {
       );
 
       // Step 1: Technical Analysis
-      const technicalAnalysis = await this.technicalAnalysisAgent.analyze(
-        params.candleData,
-        params.currentPrice,
-        params.symbol,
-      );
+      const technicalAnalysis = await this.technicalAnalysisAgent.analyze({
+        candleData: params.candleData,
+        currentPrice: params.currentPrice,
+        symbol: params.symbol,
+      });
 
       // Step 2: Risk Management Calculation
       const riskParams: RiskCalculationParams = {
@@ -93,6 +93,7 @@ export class SophisticatedTradingAgent extends BaseAgent {
         technicalAnalysis,
         riskLevels,
         botMaxPositionSize: params.botMaxPositionSize,
+        currentPrice: params.currentPrice,
       };
 
       const positionSizing = await this.positionSizingAgent.calculatePositionSize(positionParams);
@@ -142,16 +143,24 @@ export class SophisticatedTradingAgent extends BaseAgent {
       positionSizing.confidence * 0.3 +
       (technicalAnalysis.trend !== "NEUTRAL" ? 0.7 : 0.5) * 0.3;
 
-    // Trade approval criteria
+    // Enhanced logging for debugging
+    logger.info(
+      `[SOPHISTICATED] Confidence breakdown: risk=${(riskLevels.confidence * 100).toFixed(1)}%, position=${(positionSizing.confidence * 100).toFixed(1)}%, technical=${technicalAnalysis.trend}, overall=${(overallConfidence * 100).toFixed(1)}%`,
+    );
+    logger.info(`[SOPHISTICATED] R/R ratio: ${riskLevels.riskRewardRatio.toFixed(2)}:1`);
+
+    // Trade approval criteria - RELAXED FOR M1 SCALPING
     let shouldTrade = true;
     const rejectionReasons: string[] = [];
 
-    if (overallConfidence < 0.6) {
+    // Lowered confidence threshold from 0.6 to 0.5 (60% to 50%)
+    if (overallConfidence < 0.5) {
       shouldTrade = false;
       rejectionReasons.push(`Low confidence: ${(overallConfidence * 100).toFixed(1)}%`);
     }
 
-    if (riskLevels.riskRewardRatio < 1.2) {
+    // Lowered R/R requirement from 1.2 to 0.8 for M1 scalping
+    if (riskLevels.riskRewardRatio < 0.8) {
       shouldTrade = false;
       rejectionReasons.push(`Poor R/R: ${riskLevels.riskRewardRatio.toFixed(2)}:1`);
     }
@@ -162,9 +171,13 @@ export class SophisticatedTradingAgent extends BaseAgent {
       reasoning.push(
         `📊 ${technicalAnalysis.trend} trend, R/R: ${riskLevels.riskRewardRatio.toFixed(2)}:1`,
       );
+      logger.info(
+        `[SOPHISTICATED] ✅ TRADE APPROVED: ${(overallConfidence * 100).toFixed(1)}% confidence, ${riskLevels.riskRewardRatio.toFixed(2)}:1 R/R`,
+      );
     } else {
       reasoning.push(`❌ Trade REJECTED:`);
       reasoning.push(...rejectionReasons);
+      logger.info(`[SOPHISTICATED] ❌ TRADE REJECTED: ${rejectionReasons.join(", ")}`);
     }
 
     return {

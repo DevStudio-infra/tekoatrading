@@ -1,17 +1,21 @@
 import { prisma } from "../prisma";
 import { logger } from "../logger";
-import { CapitalMainService } from "../modules/capital";
+import { CapitalMainService } from "../modules/capital/services/capital-main.service";
 import {
   SophisticatedTradingAgent,
   SophisticatedTradeParams,
   SophisticatedTradeResult,
 } from "../agents/trading/sophisticated-trading.agent";
-import { CandleData } from "../agents/core/technical-analysis.agent";
+import { CandleData } from "../modules/chart/chart-engine.service";
 import { EnhancedTradingDecisionAgent } from "../ai/enhanced-trading-decision-agent";
 import { credentialsEncryption } from "./credentials-encryption.service";
 import { supabaseStorageService } from "./supabase-storage.service";
-import { ChartService } from "../modules/chart";
+import { ChartService } from "../modules/chart/chart.service";
 import { marketValidationService } from "./market-validation.service";
+import { PositionAwarenessAgent } from "../agents/trading/position-awareness.agent";
+import { PositionContextEvaluationAgent } from "../agents/trading/position-context-evaluation.agent";
+import { DynamicTradeManagerAgent } from "../agents/trading/dynamic-trade-manager.agent";
+import { BotService } from "./bot.service";
 
 // Type definitions
 interface MarketData {
@@ -59,10 +63,14 @@ export interface TradeExecutionResult {
  */
 export class BotEvaluationService {
   private sophisticatedTradingAgent: SophisticatedTradingAgent;
+  private positionAwarenessAgent: PositionAwarenessAgent;
+  private dynamicTradeManagerAgent: DynamicTradeManagerAgent;
   private capitalApiInstances: Map<string, any> = new Map(); // Cache authenticated instances
 
   constructor() {
     this.sophisticatedTradingAgent = new SophisticatedTradingAgent();
+    this.positionAwarenessAgent = new PositionAwarenessAgent();
+    this.dynamicTradeManagerAgent = new DynamicTradeManagerAgent();
   }
 
   /**
@@ -151,7 +159,7 @@ export class BotEvaluationService {
       );
       logger.info(`✅ Shared candlestick data ready: ${sharedCandleData.length} bars`);
 
-      // Step 1: Generate chart (using shared data)
+      // Step 1: Generate chart (using shared data) - OPTIONAL
       const chartResult = await this.generateBotChart(
         botId,
         bot.tradingPairSymbol,
@@ -160,8 +168,14 @@ export class BotEvaluationService {
         sharedCandleData, // Pass shared data
       );
 
-      if (!chartResult.success) {
-        throw new Error(`Chart generation failed: ${chartResult.error}`);
+      // Chart generation is optional - don't fail the entire evaluation if it fails
+      let chartUrl = "temp://chart-generation-failed";
+      if (chartResult.success && chartResult.chartUrl) {
+        chartUrl = chartResult.chartUrl;
+        logger.info(`✅ Chart generated successfully: ${chartUrl}`);
+      } else {
+        logger.warn(`⚠️ Chart generation failed: ${chartResult.error || "Unknown error"}`);
+        logger.info("📊 Continuing bot evaluation without chart (this is non-critical)");
       }
 
       // Step 2: Collect portfolio context
@@ -171,7 +185,7 @@ export class BotEvaluationService {
       const analysisResult = await this.performAIAnalysis(
         bot.tradingPairSymbol,
         bot.timeframe,
-        chartResult.chartUrl!,
+        chartUrl,
         { ...portfolioContext, botId, bot }, // Pass bot data to analysis
         await this.getRealMarketPrice(bot.tradingPairSymbol, botId), // Real market price
         sharedCandleData, // Pass shared data
@@ -185,7 +199,7 @@ export class BotEvaluationService {
       const evaluation = await this.createEvaluationRecord(
         botId,
         bot.userId,
-        chartResult.chartUrl!,
+        chartUrl,
         analysisResult.data,
         portfolioContext,
       );
@@ -201,14 +215,186 @@ export class BotEvaluationService {
           analysisResult.data.decision === "SELL" ||
           analysisResult.data.decision === "EXECUTE_TRADE")
       ) {
-        tradeResult = await this.executeTradeFromAnalysis(
-          botId,
-          bot,
-          analysisResult.data,
-          evaluation.id,
-          sharedCandleData, // Pass shared data
+        // Step 5.1: Check position awareness before executing trade
+        logger.info(`🔍 [POSITION-AWARENESS] Checking position limits before trade execution...`);
+
+        // Get real-time account info from Capital.com API instead of database
+        logger.info(
+          `💰 [POSITION-AWARENESS] Fetching real-time account data from Capital.com API...`,
         );
-        tradeExecuted = tradeResult.success;
+
+        // Use the existing capitalApi instance for real-time data
+        const positionCheck = await this.positionAwarenessAgent.checkPositionLimits({
+          botId,
+          userId: bot.userId,
+          symbol: bot.tradingPairSymbol,
+          direction: analysisResult.data.decision as "BUY" | "SELL",
+          proposedPositionSize: 0.001, // Temporary value - will be calculated later
+          accountBalance: 1000, // Will be updated with real balance from API
+          timeframe: bot.timeframe,
+          // Pass Capital.com API instance for real-time data
+          capitalApi,
+          // Add bot configuration from database
+          botConfig: {
+            maxOpenTrades: bot.maxOpenTrades,
+            maxRiskPercentage: bot.maxRiskPercentage,
+            minRiskPercentage: bot.minRiskPercentage,
+            name: bot.name,
+          },
+          // Add strategy configuration if available
+          strategyConfig: bot.strategy
+            ? {
+                confidenceThreshold: (() => {
+                  try {
+                    const params =
+                      typeof bot.strategy.parameters === "string"
+                        ? JSON.parse(bot.strategy.parameters)
+                        : bot.strategy.parameters;
+                    return params?.confidenceThreshold;
+                  } catch {
+                    return undefined;
+                  }
+                })(),
+                riskManagement: (() => {
+                  try {
+                    const params =
+                      typeof bot.strategy.parameters === "string"
+                        ? JSON.parse(bot.strategy.parameters)
+                        : bot.strategy.parameters;
+                    return params?.riskManagement;
+                  } catch {
+                    return undefined;
+                  }
+                })(),
+                parameters: (() => {
+                  try {
+                    return typeof bot.strategy.parameters === "string"
+                      ? JSON.parse(bot.strategy.parameters)
+                      : bot.strategy.parameters;
+                  } catch {
+                    return {};
+                  }
+                })(),
+              }
+            : undefined,
+        });
+
+        if (!positionCheck.canTrade) {
+          logger.warn(
+            `🚫 [POSITION-AWARENESS] Trade blocked by position limits: ${positionCheck.reasoning.join(", ")} | Real-time account: ${positionCheck.accountInfo?.accountName || "Unknown"} (${positionCheck.riskMetrics.realAccountBalance} ${positionCheck.accountInfo?.currency || "USD"}) | Open positions: ${positionCheck.riskMetrics.totalOpenPositions}/${positionCheck.riskMetrics.maxPositionLimit}`,
+          );
+          tradeResult = {
+            success: false,
+            error: `Position management blocked trade: ${positionCheck.reasoning[0]}`,
+            executionDetails: {
+              positionCheck,
+              recommendations: positionCheck.recommendations,
+              realTimeAccountData: {
+                balance: positionCheck.riskMetrics.realAccountBalance,
+                currency: positionCheck.accountInfo?.currency,
+                openPositions: positionCheck.riskMetrics.totalOpenPositions,
+                accountName: positionCheck.accountInfo?.accountName,
+              },
+            },
+          };
+        } else {
+          // STEP 5.2: Position Context Intelligence - Use AI to evaluate if trade makes sense
+          logger.info(`🧠 [POSITION-CONTEXT] Running intelligent position context evaluation...`);
+
+          // Import Position Context Evaluation Agent
+          const positionContextAgent = new PositionContextEvaluationAgent();
+
+          // Get recent trading history for context
+          // Only consider OPEN trades to prevent blocking due to recently closed trades
+          const recentTrades = await prisma.trade.findMany({
+            where: {
+              botId,
+              status: "OPEN", // Only include currently open trades for redundancy checking
+            },
+            orderBy: { openedAt: "desc" },
+            take: 10,
+          });
+
+          // Calculate time since last trade
+          const lastTrade = recentTrades[0];
+          const timeSinceLastTrade =
+            lastTrade && lastTrade.openedAt
+              ? Math.floor((Date.now() - new Date(lastTrade.openedAt).getTime()) / 60000)
+              : Infinity;
+
+          // Prepare context for evaluation
+          const positionContextParams = {
+            symbol: bot.tradingPairSymbol,
+            proposedDirection: analysisResult.data.decision as "BUY" | "SELL",
+            currentPrice: analysisResult.data.marketPrice?.price || 50000,
+            confidence: (analysisResult.data.confidence || 0.5) * 100, // Convert decimal to percentage
+            technicalSignal: analysisResult.data.technicalAnalysis?.trend || "NEUTRAL",
+            marketConditions: analysisResult.data.reasoning || "Standard market conditions",
+            existingPositions: positionCheck.currentPositions,
+            accountBalance: positionCheck.riskMetrics.realAccountBalance,
+            timeSinceLastTrade,
+            recentTradingHistory: recentTrades.map((t) => ({
+              symbol: t.symbol,
+              direction: t.side, // Use 'side' property from database
+              timestamp: t.openedAt,
+              size: t.size,
+              entryPrice: t.entryPrice,
+            })),
+            strategyConfig: bot.strategy,
+            botConfig: {
+              maxOpenTrades: bot.maxOpenTrades,
+              maxRiskPercentage: bot.maxRiskPercentage,
+              minRiskPercentage: bot.minRiskPercentage,
+              name: bot.name,
+            },
+          };
+
+          // Run intelligent position context evaluation
+          const contextEvaluation =
+            await positionContextAgent.evaluatePositionContext(positionContextParams);
+
+          logger.info(
+            `🧠 [POSITION-CONTEXT] AI Decision: ${contextEvaluation.recommendedAction} (${contextEvaluation.confidence}% confidence)`,
+          );
+          logger.info(
+            `📊 [POSITION-CONTEXT] Market Change: ${contextEvaluation.marketChangeAssessment}`,
+          );
+          logger.info(
+            `🔗 [POSITION-CONTEXT] Position Analysis: ${contextEvaluation.positionCorrelationAnalysis}`,
+          );
+
+          if (!contextEvaluation.shouldProceed) {
+            logger.warn(
+              `🚫 [POSITION-CONTEXT] Trade blocked by AI context evaluation: ${contextEvaluation.reasoning.join(", ")}`,
+            );
+            tradeResult = {
+              success: false,
+              error: `Position context evaluation blocked trade: ${contextEvaluation.reasoning[0]}`,
+              executionDetails: {
+                positionCheck,
+                contextEvaluation,
+                aiRecommendation: contextEvaluation.recommendedAction,
+                marketAssessment: contextEvaluation.marketChangeAssessment,
+                reasoning: contextEvaluation.reasoning,
+              },
+            };
+          } else {
+            logger.info(
+              `✅ [POSITION-CONTEXT] Trade approved by AI context evaluation | Strategy alignment: ${contextEvaluation.strategyAlignmentScore}% | Market change: ${contextEvaluation.marketChangeAssessment}`,
+            );
+            logger.info(
+              `✅ [POSITION-AWARENESS] Trade approved: ${positionCheck.reasoning.join(", ")} | Real-time account: ${positionCheck.accountInfo?.accountName || "Unknown"} (${positionCheck.riskMetrics.realAccountBalance} ${positionCheck.accountInfo?.currency || "USD"}) | Open positions: ${positionCheck.riskMetrics.totalOpenPositions}/${positionCheck.riskMetrics.maxPositionLimit}`,
+            );
+            tradeResult = await this.executeTradeFromAnalysis(
+              botId,
+              bot,
+              analysisResult.data,
+              evaluation.id,
+              sharedCandleData, // Pass shared data
+            );
+            tradeExecuted = tradeResult.success;
+          }
+        }
       }
 
       logger.info(
@@ -1043,9 +1229,12 @@ export class BotEvaluationService {
       });
 
       // Execute the trade with sophisticated position sizing
-      const tradePositionSize = Math.min(sophisticatedPositionSize, bot.maxPositionSize);
+      // Handle undefined bot.maxPositionSize to prevent NaN
+      const safeBotMaxPositionSize = bot.maxPositionSize || 1000; // Default to 1000 if undefined
+      const tradePositionSize = Math.min(sophisticatedPositionSize, safeBotMaxPositionSize);
+
       logger.info(
-        `🚀 Executing trade: ${direction} ${tradePositionSize} units of ${bot.tradingPairSymbol}`,
+        `🚀 Executing trade: ${direction} ${tradePositionSize} units of ${bot.tradingPairSymbol} (sophisticated: ${sophisticatedPositionSize}, botMax: ${bot.maxPositionSize}, safeMax: ${safeBotMaxPositionSize})`,
       );
 
       const result = await capitalApi.createPosition(
@@ -1053,7 +1242,7 @@ export class BotEvaluationService {
         direction,
         tradePositionSize,
         finalStopLoss,
-        finalTakeProfit,
+        finalTakeProfit, // This now correctly maps to profitLevel in the API
       );
 
       // Log the full API response for debugging
@@ -1103,7 +1292,7 @@ export class BotEvaluationService {
             atr: sophisticatedResult.technicalAnalysis.atr.toFixed(2),
             riskRewardRatio: sophisticatedResult.riskLevels.riskRewardRatio.toFixed(2),
             overallConfidence: `${(sophisticatedResult.finalRecommendation.confidence * 100).toFixed(1)}%`,
-            positionAdjustment: `${(sophisticatedResult.positionSizing.adjustmentFactors.signalQuality * 100).toFixed(1)}%`,
+            positionConfidence: `${(sophisticatedResult.positionSizing.confidence * 100).toFixed(1)}%`,
           },
           originalAI: {
             stopLoss: analysis.stopLoss,

@@ -82,26 +82,44 @@ export class SmartRiskManagementAgent extends BaseAgent {
         return this.getFallbackRiskLevels(params);
       }
 
-      // Ensure minimum stop distance (0.05% of price)
-      const minStopDistance = currentPrice * 0.0005;
+      // Ensure minimum stop distance (0.01% of price for tighter stops)
+      const minStopDistance = currentPrice * 0.0001;
       const validStopDistance = Math.max(stopDistance, minStopDistance);
-      const positionSize = riskAmount / validStopDistance;
+
+      // HYBRID: Use percentage-based position sizing with absolute limits
+      const stopLossPercentage = validStopDistance / currentPrice;
+
+      // Method 1: Absolute risk divided by stop distance
+      const absolutePositionSize = riskAmount / validStopDistance;
+
+      // Method 2: Percentage-based approach (max 2% risk of account)
+      const maxRiskPercent = Math.min(riskPercentage / 100, 0.02); // Cap at 2%
+      const percentagePositionSize =
+        (accountBalance * maxRiskPercent) / (currentPrice * stopLossPercentage);
+
+      // Use the smaller of the two methods for safety
+      const positionSize = Math.min(absolutePositionSize, percentagePositionSize);
+
+      // Apply maximum position limits (0.01 BTC for crypto, 5% of account value)
+      const maxPositionValue = accountBalance * 0.05; // 5% of account
+      const maxPositionUnits = Math.min(0.01, maxPositionValue / currentPrice); // 0.01 BTC or 5% account value
+      const finalPositionSize = Math.min(positionSize, maxPositionUnits);
 
       logger.info(
-        `[RISK] Position calc: riskAmount=${riskAmount.toFixed(2)}, stopDistance=${stopDistance.toFixed(4)}, validStopDistance=${validStopDistance.toFixed(4)}, positionSize=${positionSize.toFixed(6)}`,
+        `[RISK] Position calc: riskAmount=${riskAmount.toFixed(2)}, stopDistance=${stopDistance.toFixed(4)}, validStopDistance=${validStopDistance.toFixed(4)}, stopLossPercentage=${(stopLossPercentage * 100).toFixed(3)}%, absoluteSize=${absolutePositionSize.toFixed(6)}, percentageSize=${percentagePositionSize.toFixed(6)}, finalSize=${finalPositionSize.toFixed(6)}`,
       );
 
       // Validate position size
-      if (!isFinite(positionSize) || positionSize <= 0 || isNaN(positionSize)) {
+      if (!isFinite(finalPositionSize) || finalPositionSize <= 0 || isNaN(finalPositionSize)) {
         logger.error(
-          `[RISK] Invalid position size: ${positionSize}, riskAmount=${riskAmount}, stopDistance=${validStopDistance}`,
+          `[RISK] Invalid position size: ${finalPositionSize}, riskAmount=${riskAmount}, stopDistance=${validStopDistance}`,
         );
         return this.getFallbackRiskLevels(params);
       }
 
       // Calculate reward metrics
       const profitDistance = Math.abs(takeProfit - currentPrice);
-      const rewardAmount = positionSize * profitDistance;
+      const rewardAmount = finalPositionSize * profitDistance;
       const riskRewardRatio = profitDistance / validStopDistance;
 
       // Calculate confidence based on technical analysis quality
@@ -115,7 +133,7 @@ export class SmartRiskManagementAgent extends BaseAgent {
         `Take Profit Method: ${this.getTakeProfitMethod(technicalAnalysis, timeframe)}`,
         `ATR-based calculation: ${technicalAnalysis.atr.toFixed(2)}`,
         `Risk/Reward Ratio: ${riskRewardRatio.toFixed(2)}:1`,
-        `Position Size: ${positionSize.toFixed(6)} units`,
+        `Position Size: ${finalPositionSize.toFixed(6)} units`,
         `Risk Amount: $${riskAmount.toFixed(2)} (${riskPercentage}% of account)`,
         `Technical Confidence: ${(confidence * 100).toFixed(1)}%`,
         `Order Strategy: ${orderDecision.orderReasoning}`,
@@ -127,7 +145,7 @@ export class SmartRiskManagementAgent extends BaseAgent {
         riskAmount,
         rewardAmount,
         riskRewardRatio,
-        positionSize,
+        positionSize: finalPositionSize,
         reasoning,
         confidence,
         orderType: orderDecision.orderType,
@@ -278,13 +296,13 @@ export class SmartRiskManagementAgent extends BaseAgent {
    */
   private getATRMultiplier(timeframe: string, purpose: "stop" | "profit"): number {
     const multipliers: { [key: string]: { stop: number; profit: number } } = {
-      M1: { stop: 1.0, profit: 1.5 }, // Very tight for scalping
-      M5: { stop: 1.2, profit: 2.0 }, // Tight for short-term
-      M15: { stop: 1.5, profit: 2.5 }, // Moderate
-      M30: { stop: 1.8, profit: 3.0 }, // Moderate
-      H1: { stop: 2.0, profit: 3.5 }, // Standard
-      H4: { stop: 2.5, profit: 4.0 }, // Wider for swing
-      D1: { stop: 3.0, profit: 5.0 }, // Wide for position
+      M1: { stop: 0.6, profit: 2.5 }, // Aggressive scalping R/R (4.2:1)
+      M5: { stop: 0.8, profit: 3.0 }, // Strong short-term R/R (3.8:1)
+      M15: { stop: 1.0, profit: 3.5 }, // Excellent swing R/R (3.5:1)
+      M30: { stop: 1.2, profit: 4.0 }, // Great intraday R/R (3.3:1)
+      H1: { stop: 1.5, profit: 5.0 }, // Outstanding hourly R/R (3.3:1)
+      H4: { stop: 2.0, profit: 6.0 }, // Superb swing R/R (3.0:1)
+      D1: { stop: 2.5, profit: 7.0 }, // Exceptional position R/R (2.8:1)
     };
 
     const config = multipliers[timeframe] || multipliers["H1"];

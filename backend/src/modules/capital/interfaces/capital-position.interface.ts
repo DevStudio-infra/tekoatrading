@@ -53,9 +53,11 @@ export interface CreatePositionRequest {
   orderType: "MARKET" | "LIMIT";
   level?: number;
   stopLevel?: number;
-  limitLevel?: number;
+  profitLevel?: number; // Changed from limitLevel to profitLevel (Capital.com API standard)
+  limitLevel?: number; // Keep for backward compatibility
   stopDistance?: number;
   limitDistance?: number;
+  profitDistance?: number; // Added for distance-based take profit
   forceOpen?: boolean;
   guaranteedStop?: boolean;
   trailingStop?: boolean;
@@ -75,9 +77,11 @@ export interface CreateOrderRequest {
   level: number;
   type: "LIMIT" | "STOP";
   stopLevel?: number;
-  limitLevel?: number;
+  profitLevel?: number; // Added for take profit
+  limitLevel?: number; // Keep for backward compatibility
   stopDistance?: number;
   limitDistance?: number;
+  profitDistance?: number; // Added for distance-based take profit
   guaranteedStop?: boolean;
   timeInForce?: "GOOD_TILL_CANCELLED" | "GOOD_TILL_DATE";
   goodTillDate?: string;

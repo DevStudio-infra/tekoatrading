@@ -193,7 +193,7 @@ export class CapitalMainService {
     direction: "BUY" | "SELL",
     size: number,
     stopLevel?: number,
-    limitLevel?: number,
+    takeProfitLevel?: number, // Renamed parameter to be more explicit
   ): Promise<DealConfirmation> {
     await this.ensureAuthenticated();
 
@@ -203,7 +203,7 @@ export class CapitalMainService {
       size,
       orderType: "MARKET",
       stopLevel,
-      limitLevel,
+      profitLevel: takeProfitLevel, // Use profitLevel instead of limitLevel for take profit
       forceOpen: true,
       currencyCode: this.session?.currency || "USD",
     };
@@ -302,7 +302,7 @@ export class CapitalMainService {
     size: number,
     level: number,
     stopLevel?: number,
-    limitLevel?: number,
+    takeProfitLevel?: number, // Renamed for consistency
   ): Promise<DealConfirmation> {
     await this.ensureAuthenticated();
 
@@ -314,7 +314,7 @@ export class CapitalMainService {
         level,
         type: "LIMIT",
         stopLevel,
-        limitLevel,
+        profitLevel: takeProfitLevel, // Use profitLevel for take profit
         currencyCode: this.session?.currency || "USD",
       };
 
