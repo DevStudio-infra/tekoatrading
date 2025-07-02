@@ -1103,7 +1103,7 @@ export class BotEvaluationService {
             atr: sophisticatedResult.technicalAnalysis.atr.toFixed(2),
             riskRewardRatio: sophisticatedResult.riskLevels.riskRewardRatio.toFixed(2),
             overallConfidence: `${(sophisticatedResult.finalRecommendation.confidence * 100).toFixed(1)}%`,
-            positionAdjustment: `${(sophisticatedResult.positionSizing.adjustmentFactor * 100).toFixed(1)}%`,
+            positionAdjustment: `${(sophisticatedResult.positionSizing.adjustmentFactors.signalQuality * 100).toFixed(1)}%`,
           },
           originalAI: {
             stopLoss: analysis.stopLoss,

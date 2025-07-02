@@ -11,10 +11,10 @@ import {
   RiskLevels,
 } from "../risk/smart-risk-management.agent";
 import {
-  ProfessionalPositionSizingAgent,
-  ProfessionalPositionSizingParams,
-  ProfessionalPositionSizingResult,
-} from "./professional-position-sizing.agent";
+  PositionSizingAgent,
+  PositionSizingParams,
+  PositionSizingResult,
+} from "./position-sizing.agent";
 
 export interface SophisticatedTradeParams {
   symbol: string;
@@ -31,7 +31,7 @@ export interface SophisticatedTradeParams {
 export interface SophisticatedTradeResult {
   technicalAnalysis: TechnicalAnalysisResult;
   riskLevels: RiskLevels;
-  positionSizing: ProfessionalPositionSizingResult;
+  positionSizing: PositionSizingResult;
   finalRecommendation: {
     shouldTrade: boolean;
     stopLoss: number;
@@ -45,13 +45,13 @@ export interface SophisticatedTradeResult {
 export class SophisticatedTradingAgent extends BaseAgent {
   private technicalAnalysisAgent: TechnicalAnalysisAgent;
   private riskManagementAgent: SmartRiskManagementAgent;
-  private professionalPositionSizingAgent: ProfessionalPositionSizingAgent;
+  private positionSizingAgent: PositionSizingAgent;
 
   constructor() {
     super("SophisticatedTradingAgent");
     this.technicalAnalysisAgent = new TechnicalAnalysisAgent();
     this.riskManagementAgent = new SmartRiskManagementAgent();
-    this.professionalPositionSizingAgent = new ProfessionalPositionSizingAgent();
+    this.positionSizingAgent = new PositionSizingAgent();
   }
 
   async analyze(data: any): Promise<any> {
@@ -65,7 +65,7 @@ export class SophisticatedTradingAgent extends BaseAgent {
       );
 
       // Step 1: Technical Analysis
-      const technicalAnalysis = await this.technicalAnalysisAgent.analyzeTechnical(
+      const technicalAnalysis = await this.technicalAnalysisAgent.analyze(
         params.candleData,
         params.currentPrice,
         params.symbol,
@@ -85,35 +85,17 @@ export class SophisticatedTradingAgent extends BaseAgent {
 
       const riskLevels = await this.riskManagementAgent.calculateRiskLevels(riskParams);
 
-      // Step 3: Professional Position Sizing
-      const professionalPositionParams: ProfessionalPositionSizingParams = {
+      // Step 3: Position Sizing
+      const positionParams: PositionSizingParams = {
         symbol: params.symbol,
         accountBalance: params.accountBalance,
-        availableBalance: params.accountBalance * 0.9, // Assume 90% available
-        currentPrice: params.currentPrice,
         baseRiskPercentage: params.riskPercentage,
         technicalAnalysis,
         riskLevels,
         botMaxPositionSize: params.botMaxPositionSize,
-
-        // Professional factors
-        currentDrawdown: 0, // TODO: Calculate from portfolio
-        openPositionsCount: 0, // TODO: Get from portfolio context
-        totalPortfolioRisk: 0, // TODO: Calculate total risk
-        marketCondition:
-          technicalAnalysis.priceAction?.volatilityRank === "HIGH" ? "VOLATILE" : "STABLE",
-        timeOfDay: "NEW_YORK", // TODO: Determine based on time
-        signalConfidence: riskLevels.confidence,
-
-        // Portfolio context
-        correlatedPositions: 0, // TODO: Calculate correlations
-        maxPortfolioAllocation: 5.0, // 5% max allocation per asset
       };
 
-      const positionSizing =
-        await this.professionalPositionSizingAgent.calculateProfessionalPositionSize(
-          professionalPositionParams,
-        );
+      const positionSizing = await this.positionSizingAgent.calculatePositionSize(positionParams);
 
       // Step 4: Final Trade Recommendation
       const finalRecommendation = this.generateFinalRecommendation(
@@ -144,7 +126,7 @@ export class SophisticatedTradingAgent extends BaseAgent {
   private generateFinalRecommendation(
     technicalAnalysis: TechnicalAnalysisResult,
     riskLevels: RiskLevels,
-    positionSizing: ProfessionalPositionSizingResult,
+    positionSizing: PositionSizingResult,
     params: SophisticatedTradeParams,
   ): {
     shouldTrade: boolean;

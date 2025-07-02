@@ -6,6 +6,8 @@ import { brokerIntegrationService } from "../services/broker-integration.service
 import { logger } from "../logger";
 import { credentialsEncryption } from "../services/credentials-encryption.service";
 import { schedulerService } from "../services/scheduler.service";
+import { tradeMonitoringService } from "../services/trade-monitoring.service";
+import { portfolioRiskManagementService } from "../services/portfolio-risk-management.service";
 
 // Enhanced validation schemas
 const createBotSchema = z
@@ -682,6 +684,127 @@ export const botsRouter = router({
       } catch (error) {
         logger.error("Error testing broker connection:", error);
         throw new Error("Failed to test broker connection");
+      }
+    }),
+
+  // Start trade monitoring
+  startMonitoring: publicProcedure
+    .input(z.object({ intervalMinutes: z.number().min(1).max(1440).default(5) }))
+    .mutation(async ({ input }) => {
+      try {
+        await tradeMonitoringService.startMonitoring(input.intervalMinutes);
+        return {
+          success: true,
+          message: `Trade monitoring started with ${input.intervalMinutes} minute intervals`,
+          status: tradeMonitoringService.getMonitoringStatus(),
+        };
+      } catch (error) {
+        logger.error("Error starting trade monitoring:", error);
+        throw new Error("Failed to start trade monitoring");
+      }
+    }),
+
+  // Stop trade monitoring
+  stopMonitoring: publicProcedure.mutation(async () => {
+    try {
+      tradeMonitoringService.stopMonitoring();
+      return {
+        success: true,
+        message: "Trade monitoring stopped",
+        status: tradeMonitoringService.getMonitoringStatus(),
+      };
+    } catch (error) {
+      logger.error("Error stopping trade monitoring:", error);
+      throw new Error("Failed to stop trade monitoring");
+    }
+  }),
+
+  // Get trade monitoring status
+  getMonitoringStatus: publicProcedure.query(async () => {
+    try {
+      const status = tradeMonitoringService.getMonitoringStatus();
+      return {
+        success: true,
+        data: status,
+      };
+    } catch (error) {
+      logger.error("Error getting trade monitoring status:", error);
+      throw new Error("Failed to get trade monitoring status");
+    }
+  }),
+
+  // Manual trade monitoring cycle
+  runMonitoringCycle: publicProcedure.mutation(async () => {
+    try {
+      const result = await tradeMonitoringService.monitorAllTrades();
+      return {
+        success: true,
+        data: result,
+        message: `Processed ${result.tradesProcessed} trades, executed ${result.decisionsExecuted} decisions`,
+      };
+    } catch (error) {
+      logger.error("Error running trade monitoring cycle:", error);
+      throw new Error("Failed to run trade monitoring cycle");
+    }
+  }),
+
+  // Portfolio Risk Management endpoints
+  getPortfolioRisk: publicProcedure
+    .input(z.object({ userId: z.string() }))
+    .query(async ({ input }) => {
+      try {
+        const riskMetrics = await portfolioRiskManagementService.calculatePortfolioRisk(
+          input.userId,
+        );
+        return {
+          success: true,
+          data: riskMetrics,
+        };
+      } catch (error) {
+        logger.error("Error getting portfolio risk metrics:", error);
+        throw new Error("Failed to calculate portfolio risk");
+      }
+    }),
+
+  getPortfolioRiskSummary: publicProcedure
+    .input(z.object({ userId: z.string() }))
+    .query(async ({ input }) => {
+      try {
+        const summary = await portfolioRiskManagementService.getPortfolioRiskSummary(input.userId);
+        return {
+          success: true,
+          data: summary,
+        };
+      } catch (error) {
+        logger.error("Error getting portfolio risk summary:", error);
+        throw new Error("Failed to get portfolio risk summary");
+      }
+    }),
+
+  validateNewPosition: publicProcedure
+    .input(
+      z.object({
+        userId: z.string(),
+        symbol: z.string(),
+        riskAmount: z.number().positive(),
+        botId: z.string(),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      try {
+        const validation = await portfolioRiskManagementService.validateNewPosition(
+          input.userId,
+          input.symbol,
+          input.riskAmount,
+          input.botId,
+        );
+        return {
+          success: true,
+          data: validation,
+        };
+      } catch (error) {
+        logger.error("Error validating new position:", error);
+        throw new Error("Failed to validate new position");
       }
     }),
 });
