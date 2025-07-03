@@ -473,17 +473,29 @@ export class EnhancedBotEvaluationService {
       // Fix take profit validation for Capital.com minimum requirements
       let cleanTakeProfit: number | null = null;
       if (orderDecision.takeProfit && orderDecision.takeProfit > 0) {
-        // Capital.com requires take profit to be at least 10% higher than current price for BTC
+        // 🚨 CRITICAL FIX: Realistic take profit validation for scalping strategies
         const currentPrice = analysis.marketPrice?.price || 99000;
-        const minTakeProfit = currentPrice * 1.1; // 10% minimum
+        const minTakeProfit = currentPrice * 1.005; // 0.5% minimum (realistic for scalping)
+        const maxTakeProfit = currentPrice * 1.5; // 50% maximum (prevent extreme values)
 
-        if (orderDecision.takeProfit >= minTakeProfit) {
+        if (
+          orderDecision.takeProfit >= minTakeProfit &&
+          orderDecision.takeProfit <= maxTakeProfit
+        ) {
           cleanTakeProfit = orderDecision.takeProfit;
+          logger.info(
+            `✅ Take profit validated: ${orderDecision.takeProfit} (${((orderDecision.takeProfit / currentPrice - 1) * 100).toFixed(2)}% profit)`,
+          );
+        } else if (orderDecision.takeProfit < minTakeProfit) {
+          logger.warn(
+            `⚠️ Take profit ${orderDecision.takeProfit} below minimum ${minTakeProfit.toFixed(2)} (0.5% profit) - removing take profit`,
+          );
+          cleanTakeProfit = null;
         } else {
           logger.warn(
-            `⚠️ Take profit ${orderDecision.takeProfit} below Capital.com minimum ${minTakeProfit.toFixed(2)} - removing take profit`,
+            `⚠️ Take profit ${orderDecision.takeProfit} above maximum ${maxTakeProfit.toFixed(2)} (50% profit) - capping take profit`,
           );
-          cleanTakeProfit = null; // Remove take profit if below minimum
+          cleanTakeProfit = maxTakeProfit;
         }
       }
 
@@ -535,7 +547,24 @@ export class EnhancedBotEvaluationService {
         cleanTakeProfit || undefined,
       );
 
-      if (tradeResult.success) {
+      // 🚨 CRITICAL FIX: Capital.com API returns DealConfirmation, not {success: boolean}
+      // Check dealStatus and status instead of non-existent 'success' property
+      const isTradeSuccessful =
+        tradeResult &&
+        (tradeResult.dealStatus === "ACCEPTED" ||
+          tradeResult.status === "OPEN" ||
+          tradeResult.dealReference); // Has deal reference means request was accepted
+
+      logger.info(`🔍 Trade Success Detection:`, {
+        dealStatus: tradeResult?.dealStatus,
+        status: tradeResult?.status,
+        dealReference: tradeResult?.dealReference,
+        dealId: tradeResult?.dealId,
+        isTradeSuccessful,
+        fullTradeResult: tradeResult,
+      });
+
+      if (isTradeSuccessful) {
         // Mark order as filled in coordinator
         await this.professionalOrderManager.getOrderStatistics(bot.id).then(() => {
           // Order filled successfully
@@ -558,7 +587,7 @@ export class EnhancedBotEvaluationService {
             type: "MARKET",
             confidence: Math.min(1.0, Math.max(0.0, orderDecision.confidence || 0.7)),
             reason: orderDecision.reasoning || "Professional order management decision",
-            brokerTradeId: tradeResult.tradeId || `local-${Date.now()}`,
+            brokerTradeId: tradeResult.dealId || tradeResult.dealReference || `local-${Date.now()}`,
           },
         });
 
@@ -573,17 +602,23 @@ export class EnhancedBotEvaluationService {
           },
         };
       } else {
+        // 🚨 CRITICAL FIX: Handle trade rejection properly
+        const rejectReason =
+          tradeResult?.rejectReason || tradeResult?.errorMessage || "Trade was rejected by broker";
+
         // Cancel pending order on trade failure
         await this.professionalOrderManager.cancelOrderDecision(
           bot.id,
           bot.tradingPairSymbol,
-          `Trade execution failed: ${tradeResult.error || "Unknown error"}`,
+          `Trade execution failed: ${rejectReason}`,
         );
 
-        logger.error(`❌ Professional Trade Execution Failed: ${tradeResult.error}`);
+        logger.error(`❌ Professional Trade Execution Failed: ${rejectReason}`);
+        logger.error(`🔍 Full rejection details:`, tradeResult);
+
         return {
           success: false,
-          error: tradeResult.error || "Trade execution failed",
+          error: rejectReason,
         };
       }
     } catch (error) {
