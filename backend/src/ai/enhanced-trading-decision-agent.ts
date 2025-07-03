@@ -40,6 +40,25 @@ export class EnhancedTradingDecisionAgent extends BaseAgent {
     symbol: string;
     timeframe?: string;
     strategy?: string;
+    strategyConfig?: {
+      name: string;
+      description: string;
+      rules: string;
+      parameters: any;
+      confidenceThreshold: number;
+      riskManagement: any;
+    };
+    botConfig?: {
+      id: string;
+      name: string;
+      description: string;
+      maxOpenTrades: number;
+      maxRiskPercentage: number;
+      minRiskPercentage: number;
+      tradingPairSymbol: string;
+      timeframe: string;
+      isActive: boolean;
+    };
     marketData: any;
     riskData: any;
     accountBalance?: number;
@@ -48,11 +67,44 @@ export class EnhancedTradingDecisionAgent extends BaseAgent {
     try {
       console.log(`🤖 Enhanced Trading Decision Agent analyzing ${data.symbol}`);
 
-      // Prepare context for professional analysis
+      // Log strategy and bot configuration for debugging
+      if (data.strategyConfig) {
+        console.log(
+          `📋 Strategy: ${data.strategyConfig.name} - ${data.strategyConfig.description}`,
+        );
+        console.log(`📋 Strategy Rules: ${data.strategyConfig.rules}`);
+        console.log(`📋 Confidence Threshold: ${data.strategyConfig.confidenceThreshold}%`);
+      }
+      if (data.botConfig) {
+        console.log(
+          `🤖 Bot: ${data.botConfig.name} - Max Trades: ${data.botConfig.maxOpenTrades}, Risk: ${data.botConfig.maxRiskPercentage}%`,
+        );
+      }
+
+      // Prepare context for professional analysis with strategy rules
       const tradingContext = {
         symbol: data.symbol,
         timeframe: data.timeframe || "1h",
         strategy: data.strategy || "trend_following",
+        strategyConfig: data.strategyConfig || {
+          name: "trend_following",
+          description: "Basic trend following strategy",
+          rules: "Follow market trends with proper risk management",
+          parameters: {},
+          confidenceThreshold: 70,
+          riskManagement: { maxRiskPerTrade: 2, stopLossRequired: true, takeProfitRequired: true },
+        },
+        botConfig: data.botConfig || {
+          id: "unknown",
+          name: "Unknown Bot",
+          description: "No description",
+          maxOpenTrades: 4,
+          maxRiskPercentage: 2,
+          minRiskPercentage: 0.5,
+          tradingPairSymbol: data.symbol,
+          timeframe: data.timeframe || "1h",
+          isActive: true,
+        },
         marketData: {
           currentPrice: data.marketData.price || data.marketData.currentPrice,
           high24h: data.marketData.high24h || data.marketData.price * 1.02,
@@ -67,19 +119,35 @@ export class EnhancedTradingDecisionAgent extends BaseAgent {
       };
 
       // Use sophisticated trading analysis with fallback data
-      const fallbackCandles = this.generateFallbackCandles(tradingContext.marketData.currentPrice);
+      const currentPrice =
+        tradingContext.marketData?.currentPrice || tradingContext.marketData?.price || 100000; // Fallback to 100k for BTC
+      const fallbackCandles = this.generateFallbackCandles(currentPrice);
 
       const sophisticatedResult = await this.sophisticatedAgent.analyzeTrade({
         symbol: tradingContext.symbol,
         direction: "BUY", // Will be determined by analysis
-        currentPrice: tradingContext.marketData.currentPrice,
+        currentPrice: currentPrice,
         candleData: fallbackCandles,
         timeframe: tradingContext.timeframe,
         accountBalance: tradingContext.accountBalance,
-        riskPercentage: 2.0,
-        botMaxPositionSize: 1000,
+        riskPercentage: tradingContext.botConfig.maxRiskPercentage || 2.0,
+        botMaxPositionSize: tradingContext.botConfig.maxOpenTrades * 1000 || 1000,
         strategy: tradingContext.strategy,
       });
+
+      // Apply strategy confidence threshold
+      const requiredConfidence = tradingContext.strategyConfig.confidenceThreshold || 70;
+      const actualConfidence = sophisticatedResult.finalRecommendation.confidence;
+
+      if (actualConfidence < requiredConfidence) {
+        console.log(
+          `🚨 Strategy confidence filter: ${actualConfidence}% < ${requiredConfidence}% required`,
+        );
+        sophisticatedResult.finalRecommendation.shouldTrade = false;
+        sophisticatedResult.finalRecommendation.reasoning.unshift(
+          `Strategy confidence filter: ${actualConfidence}% below required ${requiredConfidence}%`,
+        );
+      }
 
       // Convert sophisticated result to enhanced format
       const action = sophisticatedResult.finalRecommendation.shouldTrade

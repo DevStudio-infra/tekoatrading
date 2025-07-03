@@ -135,7 +135,7 @@ export class PositionAwarenessAgent extends BaseAgent {
       );
 
       // Transform Capital.com API response to our format
-      return livePositions.map((p: any) => ({
+      const mappedPositions = livePositions.map((p: any) => ({
         id: p.position.dealId,
         symbol: p.market.epic,
         side: p.position.direction as "BUY" | "SELL",
@@ -150,6 +150,16 @@ export class PositionAwarenessAgent extends BaseAgent {
         currency: p.position.currency,
         marketStatus: p.market.marketStatus,
       }));
+
+      // Debug position mapping for troubleshooting
+      logger.info(`[POSITION-AWARENESS] Position mapping debug:`, {
+        rawPositionsCount: livePositions.length,
+        mappedPositionsCount: mappedPositions.length,
+        symbols: mappedPositions.map((p) => p.symbol),
+        directions: mappedPositions.map((p) => p.side),
+      });
+
+      return mappedPositions;
     } catch (error) {
       logger.error(`[POSITION-AWARENESS] Error fetching positions from Capital.com API:`, error);
 
@@ -250,9 +260,20 @@ export class PositionAwarenessAgent extends BaseAgent {
     const recommendations: string[] = [];
     let canTrade = true;
 
-    // Use bot-configured limits (from database) instead of hardcoded values
-    const maxOpenTrades =
+    // Use bot-configured limits (from database) with conservative fallbacks
+    // For accounts with many existing positions, be more conservative
+    const existingPositionsCount = allPositions.length;
+    let maxOpenTrades =
       params.botConfig.maxOpenTrades || this.getMaxPositionLimit(params.timeframe);
+
+    // If account already has many positions (>10), be more conservative with new trades
+    if (existingPositionsCount > 10) {
+      maxOpenTrades = Math.min(maxOpenTrades, Math.max(3, existingPositionsCount + 2)); // Allow max 2 more positions
+      logger.info(
+        `[POSITION-AWARENESS] Account has ${existingPositionsCount} positions - reducing max trades to ${maxOpenTrades}`,
+      );
+    }
+
     const maxRiskPercentage = params.botConfig.maxRiskPercentage || 2.0;
     const minRiskPercentage = params.botConfig.minRiskPercentage || 0.5;
 
@@ -278,23 +299,21 @@ export class PositionAwarenessAgent extends BaseAgent {
       reasoning.push(
         `Maximum positions reached (${metrics.totalOpenPositions}/${maxOpenTrades}) per bot config`,
       );
-      recommendations.push("Close existing positions before opening new ones");
+      recommendations.push("Wait for existing positions to close");
     }
 
-    // Rule 2: Symbol-specific position limit (max 1 position per symbol)
+    // Rule 2: Symbol-specific position limit (max 1 position per symbol per direction)
     if (symbolPositions.length > 0) {
       const existingDirection = symbolPositions[0].side;
 
       if (existingDirection === params.direction) {
         canTrade = false;
         reasoning.push(`Already have ${existingDirection} position on ${params.symbol}`);
-        recommendations.push("Avoid duplicate positions on same symbol");
+        recommendations.push("Avoid duplicate positions in same direction");
       } else {
-        canTrade = false;
-        reasoning.push(
-          `Opposing ${params.direction} position would hedge existing ${existingDirection} on ${params.symbol}`,
-        );
-        recommendations.push("Avoid hedging positions - close existing position first");
+        // Allow opposite direction (hedge) but with warning
+        reasoning.push(`Warning: Opposite direction trade on ${params.symbol} (hedge position)`);
+        recommendations.push("Consider risk of opposing positions");
       }
     }
 
@@ -308,11 +327,33 @@ export class PositionAwarenessAgent extends BaseAgent {
       recommendations.push(`Reduce overall portfolio exposure below ${maxPortfolioExposure}%`);
     }
 
-    // Rule 4: REMOVED COOLDOWN - Now using intelligent Position Context Evaluation
-    // Instead of arbitrary cooldowns, the bot evaluation service will use
-    // PositionContextEvaluationAgent to make smart decisions about trade timing
+    // Rule 4: Timeframe-based cooldown (reasonable limits)
+    const minimumCooldown = this.getMinimumCooldown(params.timeframe);
+    if (metrics.timeSinceLastTrade < minimumCooldown) {
+      canTrade = false;
+      const remainingCooldown = Math.ceil(
+        (minimumCooldown - metrics.timeSinceLastTrade) / 1000 / 60,
+      );
+      reasoning.push(
+        `Trading cooldown: ${remainingCooldown} minutes remaining for ${params.timeframe} timeframe`,
+      );
+      recommendations.push(`Wait ${remainingCooldown} minutes before next trade`);
+    }
 
-    // Rule 5: Symbol exposure limit (use strategy risk percentage)
+    // Rule 5: DAILY TRADE LIMIT - MAX 3 TRADES PER DAY
+    const todayTrades = await this.getDailyTradeCount(params.userId, params.botId);
+    const maxDailyTrades = 3;
+
+    if (todayTrades >= maxDailyTrades) {
+      canTrade = false;
+      reasoning.push(
+        `🚨 DAILY LIMIT REACHED: ${todayTrades}/${maxDailyTrades} trades today - NO MORE TRADES ALLOWED`,
+      );
+      recommendations.push("Wait until tomorrow to trade again");
+      logger.warn(`[POSITION-AWARENESS] 🚨 DAILY LIMIT: ${todayTrades} trades today - BLOCKING`);
+    }
+
+    // Rule 6: Symbol exposure limit (use strategy risk percentage)
     const maxSymbolExposure = strategyMaxRiskPercentage * 5; // Allow multiple positions on same symbol within reason
     const symbolExposurePercent = (metrics.symbolExposure / params.accountBalance) * 100;
     if (symbolExposurePercent > maxSymbolExposure) {
@@ -389,5 +430,31 @@ export class PositionAwarenessAgent extends BaseAgent {
     const base2 = normalize(symbol2).slice(0, 3);
 
     return base1 === base2; // Same base currency (e.g., BTC/USD and BTC/EUR)
+  }
+
+  private async getDailyTradeCount(userId: string, botId: string): Promise<number> {
+    try {
+      // Get today's date range
+      const today = new Date();
+      const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
+
+      // Count trades made today by this bot
+      const todayTradeCount = await prisma.trade.count({
+        where: {
+          botId,
+          createdAt: {
+            gte: startOfDay,
+            lt: endOfDay,
+          },
+        },
+      });
+
+      logger.info(`[POSITION-AWARENESS] Daily trade count for bot ${botId}: ${todayTradeCount}`);
+      return todayTradeCount;
+    } catch (error) {
+      logger.error(`[POSITION-AWARENESS] Error counting daily trades:`, error);
+      return 0; // Safe fallback
+    }
   }
 }

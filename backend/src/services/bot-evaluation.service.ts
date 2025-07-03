@@ -6,16 +6,15 @@ import {
   SophisticatedTradeParams,
   SophisticatedTradeResult,
 } from "../agents/trading/sophisticated-trading.agent";
-import { CandleData } from "../modules/chart/chart-engine.service";
+import { CandleData } from "../agents/core/technical-analysis.agent";
 import { EnhancedTradingDecisionAgent } from "../ai/enhanced-trading-decision-agent";
 import { credentialsEncryption } from "./credentials-encryption.service";
 import { supabaseStorageService } from "./supabase-storage.service";
-import { ChartService } from "../modules/chart/chart.service";
+import { ChartService } from "../modules/chart";
 import { marketValidationService } from "./market-validation.service";
 import { PositionAwarenessAgent } from "../agents/trading/position-awareness.agent";
 import { PositionContextEvaluationAgent } from "../agents/trading/position-context-evaluation.agent";
 import { DynamicTradeManagerAgent } from "../agents/trading/dynamic-trade-manager.agent";
-import { BotService } from "./bot.service";
 
 // Type definitions
 interface MarketData {
@@ -1462,4 +1461,8 @@ export class BotEvaluationService {
 }
 
 // Export singleton instance
-export const botEvaluationService = new BotEvaluationService();
+// PROFESSIONAL ORDER MANAGEMENT SYSTEM - Enhanced Version
+import { EnhancedBotEvaluationService } from "./enhanced-bot-evaluation.service";
+
+// Export the Enhanced Professional Bot Evaluation Service
+export const botEvaluationService = new EnhancedBotEvaluationService();
