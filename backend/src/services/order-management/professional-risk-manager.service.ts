@@ -277,6 +277,18 @@ export class ProfessionalRiskManager {
       technicalRisk,
     );
 
+    // Debug risk manager values
+    console.log(`🔍 Professional Risk Manager Debug:`, {
+      analysisStopLoss: analysis.stopLoss,
+      analysisTakeProfit: analysis.takeProfit,
+      analysisAction: analysis.action,
+      analysisDirection: analysis.direction,
+      professionalStopLoss: professionalLevels.stopLoss,
+      professionalTakeProfit: professionalLevels.takeProfit,
+      strategyStopLossType: strategyRisk.stopLossType,
+      strategyTakeProfitType: strategyRisk.takeProfitType,
+    });
+
     // Calculate final risk metrics
     const finalRiskScore = Math.max(
       1,
@@ -366,33 +378,84 @@ export class ProfessionalRiskManager {
    * Calculate professional stop loss and take profit levels
    */
   private calculateProfessionalLevels(analysis: any, strategyRisk: any, technicalRisk: any): any {
-    const currentPrice = analysis.marketPrice?.price || 0;
+    // Get current price from multiple possible sources
+    const currentPrice =
+      analysis.marketPrice?.price || analysis.currentPrice || analysis.entryPrice || 0;
     const atr = analysis.atr || currentPrice * 0.01; // Default 1% ATR
 
     let stopLoss = analysis.stopLoss;
     let takeProfit = analysis.takeProfit;
 
-    // Professional stop loss calculation
-    if (strategyRisk.stopLossType === "atr_based") {
+    // Determine direction from analysis (Enhanced Decision uses 'action', not 'direction')
+    const direction =
+      analysis.direction ||
+      (analysis.action === "buy" ? "BUY" : analysis.action === "sell" ? "SELL" : "BUY");
+
+    console.log(`🔍 Professional Levels Debug:`, {
+      currentPrice,
+      atr,
+      direction,
+      originalStopLoss: analysis.stopLoss,
+      originalTakeProfit: analysis.takeProfit,
+      strategyStopLossType: strategyRisk.stopLossType,
+      strategyTakeProfitType: strategyRisk.takeProfitType,
+    });
+
+    // 🚨 CRITICAL FIX: Only override if analysis doesn't have stop loss OR if current price is invalid
+    // Trust the AI's calculated stop loss unless there's a compelling reason to override
+    if (
+      (!analysis.stopLoss || analysis.stopLoss <= 0) &&
+      strategyRisk.stopLossType === "atr_based" &&
+      currentPrice > 0
+    ) {
       const atrMultiplier = technicalRisk.riskScore > 6 ? 2.5 : 2.0; // Wider stops for higher risk
       stopLoss =
-        analysis.direction === "BUY"
+        direction === "BUY"
           ? currentPrice - atr * atrMultiplier
           : currentPrice + atr * atrMultiplier;
+
+      console.log(
+        `🔧 ATR-based stop loss override: ${stopLoss} (currentPrice: ${currentPrice}, atr: ${atr}, direction: ${direction})`,
+      );
+    } else {
+      console.log(
+        `🎯 Using AI-calculated stop loss: ${stopLoss} (analysis.stopLoss: ${analysis.stopLoss})`,
+      );
     }
 
-    // Professional take profit calculation
-    if (strategyRisk.takeProfitType === "ratio_based" && stopLoss) {
+    // Professional take profit calculation - only override if needed
+    if (
+      (!analysis.takeProfit || analysis.takeProfit <= 0) &&
+      strategyRisk.takeProfitType === "ratio_based" &&
+      stopLoss &&
+      currentPrice > 0
+    ) {
       const stopDistance = Math.abs(currentPrice - stopLoss);
       takeProfit =
-        analysis.direction === "BUY"
+        direction === "BUY"
           ? currentPrice + stopDistance * strategyRisk.targetRiskReward
           : currentPrice - stopDistance * strategyRisk.targetRiskReward;
+
+      console.log(`🔧 Ratio-based take profit override: ${takeProfit}`);
+    } else {
+      console.log(
+        `🎯 Using AI-calculated take profit: ${takeProfit} (analysis.takeProfit: ${analysis.takeProfit})`,
+      );
     }
 
+    // Fallback values only if we still don't have valid levels
+    const finalStopLoss =
+      stopLoss && stopLoss > 0 ? stopLoss : currentPrice > 0 ? currentPrice * 0.99 : 0;
+    const finalTakeProfit =
+      takeProfit && takeProfit > 0 ? takeProfit : currentPrice > 0 ? currentPrice * 1.02 : 0;
+
+    console.log(
+      `📊 Final Professional Levels: SL=${finalStopLoss}, TP=${finalTakeProfit}, Price=${currentPrice}`,
+    );
+
     return {
-      stopLoss: stopLoss || currentPrice * 0.99, // 1% fallback
-      takeProfit: takeProfit || currentPrice * 1.02, // 2% fallback
+      stopLoss: finalStopLoss,
+      takeProfit: finalTakeProfit,
     };
   }
 

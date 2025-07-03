@@ -223,13 +223,16 @@ export class EnhancedBotEvaluationService {
       logger.info(`✅ Position awareness check passed - proceeding with trade decision`);
 
       // STEP 4.5: AI CONFIDENCE THRESHOLD CHECK
-      const aiConfidence =
+      const rawConfidence =
         analysisResult.data?.confidence || analysisResult.data?.overall_confidence || 0;
+
+      // Convert decimal confidence (0.76) to percentage (76%) if needed
+      const aiConfidence = rawConfidence <= 1 ? rawConfidence * 100 : rawConfidence;
       const minimumConfidence = 75; // 75% minimum confidence
 
       if (aiConfidence < minimumConfidence) {
         logger.warn(
-          `🚨 LOW CONFIDENCE BLOCKED: AI confidence ${aiConfidence}% below minimum ${minimumConfidence}%`,
+          `🚨 LOW CONFIDENCE BLOCKED: AI confidence ${aiConfidence}% (raw: ${rawConfidence}) below minimum ${minimumConfidence}%`,
         );
 
         return {
@@ -249,16 +252,38 @@ export class EnhancedBotEvaluationService {
       }
 
       logger.info(
-        `✅ AI confidence check passed: ${aiConfidence}% (minimum ${minimumConfidence}%)`,
+        `✅ AI confidence check passed: ${aiConfidence}% (raw: ${rawConfidence}) (minimum ${minimumConfidence}%)`,
       );
 
       // STEP 5: PROFESSIONAL ORDER MANAGEMENT DECISION
       logger.info(`⚡ Professional Order Management Decision...`);
+
+      // 🚨 CRITICAL FIX: Add market price to analysis structure
+      const enhancedAnalysis = {
+        ...analysisResult.data,
+        marketPrice: {
+          price: realMarketPrice.price,
+          bid: realMarketPrice.bid,
+          ask: realMarketPrice.ask,
+        },
+        currentPrice: realMarketPrice.price,
+        entryPrice: realMarketPrice.price,
+      };
+
+      logger.info(`🔍 Enhanced Analysis Debug:`, {
+        hasMarketPrice: !!enhancedAnalysis.marketPrice,
+        priceValue: enhancedAnalysis.marketPrice?.price,
+        hasCurrentPrice: !!enhancedAnalysis.currentPrice,
+        hasEntryPrice: !!enhancedAnalysis.entryPrice,
+        originalStopLoss: enhancedAnalysis.stopLoss,
+        originalTakeProfit: enhancedAnalysis.takeProfit,
+      });
+
       const orderDecision = await this.professionalOrderManager.requestOrderDecision({
         botId: bot.id,
         symbol: bot.tradingPairSymbol,
         direction: normalizedDirection as "BUY" | "SELL", // Use AI-determined direction
-        analysis: analysisResult.data,
+        analysis: enhancedAnalysis, // Use enhanced analysis with market price
         strategy: bot.strategy,
         marketConditions: {
           volatility: "MEDIUM",
@@ -293,7 +318,7 @@ export class EnhancedBotEvaluationService {
           bot,
           capitalApi,
           orderDecision,
-          analysisResult.data,
+          enhancedAnalysis, // Use enhanced analysis with market price
           evaluation.id,
         );
 

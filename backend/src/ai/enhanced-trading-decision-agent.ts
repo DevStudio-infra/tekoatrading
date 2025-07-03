@@ -137,7 +137,10 @@ export class EnhancedTradingDecisionAgent extends BaseAgent {
 
       // Apply strategy confidence threshold
       const requiredConfidence = tradingContext.strategyConfig.confidenceThreshold || 70;
-      const actualConfidence = sophisticatedResult.finalRecommendation.confidence;
+      const rawConfidence = sophisticatedResult.finalRecommendation.confidence;
+
+      // Convert decimal confidence (0.82) to percentage (82%) if needed
+      const actualConfidence = rawConfidence <= 1 ? rawConfidence * 100 : rawConfidence;
 
       if (actualConfidence < requiredConfidence) {
         console.log(
