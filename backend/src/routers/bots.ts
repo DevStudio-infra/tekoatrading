@@ -445,11 +445,16 @@ export const botsRouter = router({
     .input(botEvaluationSchema.extend({ userId: z.string() }))
     .mutation(async ({ input }) => {
       try {
-        const evaluation = await botEvaluationService.createEvaluation(
-          input.botId,
-          input.userId,
-          input.chartData || {},
-        );
+        const evaluation = await botEvaluationService.createEvaluation({
+          botId: input.botId,
+          userId: input.userId,
+          chartUrl: "manual-evaluation",
+          analysis: input.chartData || {},
+          portfolioContext: {},
+          orderDecision: { reasoning: "Manual evaluation" },
+          symbol: "MANUAL",
+          timeframe: "MANUAL",
+        });
 
         logger.info(`Created manual evaluation for bot ${input.botId}: ${evaluation.id}`);
         return evaluation;

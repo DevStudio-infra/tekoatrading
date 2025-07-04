@@ -8,10 +8,16 @@ import {
   CardHeader,
   CardTitle,
 } from "../../shared/components/ui/card";
-import { Bot, TrendingUp, Shield } from "lucide-react";
+import { Button } from "../../shared/components/ui/button";
+import { Bot, TrendingUp, Shield, ArrowRight } from "lucide-react";
+import Link from "next/link";
+import { useParams } from "next/navigation";
 
 export function HomeFeatures() {
   const t = useTranslations("home");
+  const commonT = useTranslations("common");
+  const params = useParams();
+  const locale = params.locale || "en";
 
   const features = [
     {
@@ -53,6 +59,8 @@ export function HomeFeatures() {
             );
           })}
         </div>
+
+        {/* View All Features Button - Will be added later */}
       </div>
     </div>
   );

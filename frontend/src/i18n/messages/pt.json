@@ -1,6 +1,7 @@
 {
   "common": {
     "home": "Início",
+    "features": "Recursos",
     "dashboard": "Painel",
     "bots": "Bots de Trading",
     "portfolio": "Portfólio",
@@ -105,6 +106,109 @@
     "signUp": {
       "title": "Criar conta",
       "subtitle": "Inicie sua jornada de trading"
+    }
+  },
+  "features": {
+    "hero": {
+      "badge": "Trading IA Profissional",
+      "title": "Inteligência de Trading de Nova Geração",
+      "subtitle": "Experimente o poder do nosso Comitê de Trading Profissional - um sofisticado sistema de IA multi-agente que toma decisões como uma equipe de traders especialistas trabalhando juntos.",
+      "getStarted": "Começar a Negociar",
+      "viewDemo": "Ver Demo"
+    },
+    "professionalSection": {
+      "title": "Comitê de Trading Profissional",
+      "subtitle": "Cinco agentes de IA especializados trabalhando juntos para entregar decisões de trading de grau institucional com precisão e confiabilidade."
+    },
+    "committee": {
+      "title": "Comitê Multi-Agente",
+      "description": "Cinco agentes de IA especialistas colaboram como uma mesa de trading profissional para analisar cada oportunidade de múltiplas perspectivas antes de tomar decisões.",
+      "badge": "Sistema Central",
+      "benefits": {
+        "technical": "Especialista em Análise Técnica avalia padrões de gráficos e sinais do mercado",
+        "risk": "Gestor de Risco de Portfólio otimiza o tamanho da posição e limites de exposição",
+        "timing": "Agente de Raciocínio Temporal identifica o momento ideal de entrada e saída",
+        "consensus": "Coordenador de Decisões sintetiza todas as recomendações para aprovação final"
+      }
+    },
+    "aiDecisions": {
+      "title": "Tomada de Decisão Inteligente",
+      "description": "Nossa IA não apenas segue regras simples - ela entende o contexto do mercado, lembra de negociações recentes e se adapta a condições em mudança em tempo real.",
+      "badge": "IA Inteligente",
+      "benefits": {
+        "contextAware": "Lembra seu histórico de trading e evita sobre-negociação",
+        "adaptable": "Ajusta estratégia baseada na volatilidade e condições do mercado",
+        "learning": "Melhora continuamente com feedback do mercado e performance",
+        "professional": "Toma decisões como traders institucionais experientes"
+      }
+    },
+    "riskManagement": {
+      "title": "Proteção de Risco Avançada",
+      "description": "Gestão de risco de grau institucional que protege seu capital com dimensionamento sofisticado de posições e monitoramento de exposição.",
+      "badge": "Proteção",
+      "benefits": {
+        "institutional": "Controles de risco e limites de posição de nível bancário",
+        "realTime": "Monitoramento ao vivo do saldo da conta e posições abertas",
+        "drawdown": "Proteção automática de drawdown e análise de correlação",
+        "sizing": "Dimensionamento profissional de posições previne sobre-exposição perigosa"
+      }
+    },
+    "advancedSection": {
+      "title": "Recursos Avançados de Trading",
+      "subtitle": "Tecnologia de ponta que lhe dá vantagem nos mercados competitivos de hoje."
+    },
+    "positionAwareness": {
+      "title": "Consciência de Posição",
+      "description": "Monitoramento em tempo real de todas suas posições e espaçamento inteligente de negociações para prevenir sobre-trading e otimizar performance."
+    },
+    "temporalReasoning": {
+      "title": "Inteligência de Timing de Mercado",
+      "description": "Algoritmos avançados analisam sessões de mercado, padrões de liquidez e fatores de tempo para executar negociações em momentos ideais."
+    },
+    "marketIntelligence": {
+      "title": "Inteligência de Mercado",
+      "description": "Análise abrangente do mercado incluindo sentimento, avaliação de volatilidade e fatores macro-econômicos que impactam suas negociações."
+    },
+    "professionalSizing": {
+      "title": "Dimensionamento Profissional de Posições",
+      "description": "Algoritmos sofisticados calculam tamanhos ideais de posição baseados no saldo da conta, tolerância ao risco e condições do mercado."
+    },
+    "realTimeSync": {
+      "title": "Sincronização em Tempo Real",
+      "description": "Conexão ao vivo com sua conta de corretora para rastreamento preciso do saldo, monitoramento de posições e execução instantânea de negociações."
+    },
+    "instantExecution": {
+      "title": "Execução Ultra-Rápida",
+      "description": "Execução de negociações de ultra-baixa latência com gestão de ordens de grau profissional e controles de risco."
+    },
+    "benefits": {
+      "title": "Por Que Traders Escolhem Nossa Plataforma",
+      "subtitle": "Experimente a diferença que a tecnologia de trading IA de grau profissional faz.",
+      "precision": {
+        "title": "Trading de Precisão",
+        "description": "Nosso sistema multi-agente elimina decisões emocionais e erro humano, entregando performance de trading consistente e baseada em dados."
+      },
+      "protection": {
+        "title": "Proteção de Capital",
+        "description": "Gestão de risco avançada protege seus investimentos com dimensionamento de posições de grau institucional e controles de exposição."
+      },
+      "intelligence": {
+        "title": "Inteligência de Mercado",
+        "description": "Fique à frente do mercado com IA que entende dinâmicas complexas do mercado e se adapta a condições em mudança."
+      },
+      "stats": {
+        "title": "Performance Profissional",
+        "agents": "Agentes IA",
+        "monitoring": "Monitoramento",
+        "uptime": "Tempo Ativo",
+        "execution": "Execução"
+      }
+    },
+    "cta": {
+      "title": "Pronto para Negociar Como um Profissional?",
+      "subtitle": "Junte-se a milhares de traders que confiam no nosso Comitê de Trading Profissional para gerenciar seus portfólios.",
+      "start": "Começar a Negociar",
+      "explore": "Explorar Plataforma"
     }
   }
 }

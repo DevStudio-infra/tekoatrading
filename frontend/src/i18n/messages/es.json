@@ -1,6 +1,7 @@
 {
   "common": {
     "home": "Inicio",
+    "features": "Características",
     "dashboard": "Panel",
     "bots": "Bots de Trading",
     "portfolio": "Portafolio",
@@ -117,6 +118,109 @@
     "signUp": {
       "title": "Crear cuenta",
       "subtitle": "Comienza tu viaje de trading"
+    }
+  },
+  "features": {
+    "hero": {
+      "badge": "Trading IA Profesional",
+      "title": "Inteligencia de Trading de Nueva Generación",
+      "subtitle": "Experimenta el poder de nuestro Comité de Trading Profesional: un sofisticado sistema de IA multi-agente que toma decisiones como un equipo de traders expertos trabajando juntos.",
+      "getStarted": "Comenzar a Operar",
+      "viewDemo": "Ver Demo"
+    },
+    "professionalSection": {
+      "title": "Comité de Trading Profesional",
+      "subtitle": "Cinco agentes de IA especializados trabajando juntos para entregar decisiones de trading de grado institucional con precisión y confiabilidad."
+    },
+    "committee": {
+      "title": "Comité Multi-Agente",
+      "description": "Cinco agentes de IA expertos colaboran como un escritorio de trading profesional para analizar cada oportunidad desde múltiples perspectivas antes de tomar decisiones.",
+      "badge": "Sistema Central",
+      "benefits": {
+        "technical": "Especialista en Análisis Técnico evalúa patrones de gráficos y señales del mercado",
+        "risk": "Gestor de Riesgo de Portafolio optimiza el tamaño de posición y límites de exposición",
+        "timing": "Agente de Razonamiento Temporal identifica el momento óptimo de entrada y salida",
+        "consensus": "Coordinador de Decisiones sintetiza todas las recomendaciones para aprobación final"
+      }
+    },
+    "aiDecisions": {
+      "title": "Toma de Decisiones Inteligente",
+      "description": "Nuestra IA no solo sigue reglas simples: entiende el contexto del mercado, recuerda operaciones recientes y se adapta a condiciones cambiantes en tiempo real.",
+      "badge": "IA Inteligente",
+      "benefits": {
+        "contextAware": "Recuerda tu historial de trading y evita el sobre-trading",
+        "adaptable": "Ajusta la estrategia basada en la volatilidad y condiciones del mercado",
+        "learning": "Mejora continuamente del feedback del mercado y rendimiento",
+        "professional": "Toma decisiones como traders institucionales experimentados"
+      }
+    },
+    "riskManagement": {
+      "title": "Protección de Riesgo Avanzada",
+      "description": "Gestión de riesgo de grado institucional que protege tu capital con dimensionamiento sofisticado de posiciones y monitoreo de exposición.",
+      "badge": "Protección",
+      "benefits": {
+        "institutional": "Controles de riesgo y límites de posición de nivel bancario",
+        "realTime": "Monitoreo en vivo del balance de cuenta y posiciones abiertas",
+        "drawdown": "Protección automática de drawdown y análisis de correlación",
+        "sizing": "Dimensionamiento profesional de posiciones previene sobre-exposición peligrosa"
+      }
+    },
+    "advancedSection": {
+      "title": "Características Avanzadas de Trading",
+      "subtitle": "Tecnología de vanguardia que te da la ventaja en los mercados competitivos de hoy."
+    },
+    "positionAwareness": {
+      "title": "Conciencia de Posición",
+      "description": "Monitoreo en tiempo real de todas tus posiciones y espaciamiento inteligente de operaciones para prevenir sobre-trading y optimizar rendimiento."
+    },
+    "temporalReasoning": {
+      "title": "Inteligencia de Tiempo de Mercado",
+      "description": "Algoritmos avanzados analizan sesiones de mercado, patrones de liquidez y factores de tiempo para ejecutar operaciones en momentos óptimos."
+    },
+    "marketIntelligence": {
+      "title": "Inteligencia de Mercado",
+      "description": "Análisis integral del mercado incluyendo sentimiento, evaluación de volatilidad y factores macro-económicos que impactan tus operaciones."
+    },
+    "professionalSizing": {
+      "title": "Dimensionamiento Profesional de Posiciones",
+      "description": "Algoritmos sofisticados calculan tamaños óptimos de posición basados en balance de cuenta, tolerancia al riesgo y condiciones del mercado."
+    },
+    "realTimeSync": {
+      "title": "Sincronización en Tiempo Real",
+      "description": "Conexión en vivo a tu cuenta de broker para seguimiento preciso del balance, monitoreo de posiciones y ejecución instantánea de operaciones."
+    },
+    "instantExecution": {
+      "title": "Ejecución Ultra-Rápida",
+      "description": "Ejecución de operaciones de ultra-baja latencia con gestión de órdenes de grado profesional y controles de riesgo."
+    },
+    "benefits": {
+      "title": "Por Qué los Traders Eligen Nuestra Plataforma",
+      "subtitle": "Experimenta la diferencia que hace la tecnología de trading IA de grado profesional.",
+      "precision": {
+        "title": "Trading de Precisión",
+        "description": "Nuestro sistema multi-agente elimina decisiones emocionales y error humano, entregando rendimiento de trading consistente y basado en datos."
+      },
+      "protection": {
+        "title": "Protección de Capital",
+        "description": "Gestión de riesgo avanzada protege tus inversiones con dimensionamiento de posiciones de grado institucional y controles de exposición."
+      },
+      "intelligence": {
+        "title": "Inteligencia de Mercado",
+        "description": "Mantente adelante del mercado con IA que entiende dinámicas complejas del mercado y se adapta a condiciones cambiantes."
+      },
+      "stats": {
+        "title": "Rendimiento Profesional",
+        "agents": "Agentes IA",
+        "monitoring": "Monitoreo",
+        "uptime": "Tiempo Activo",
+        "execution": "Ejecución"
+      }
+    },
+    "cta": {
+      "title": "¿Listo para Operar Como un Profesional?",
+      "subtitle": "Únete a miles de traders que confían en nuestro Comité de Trading Profesional para gestionar sus portafolios.",
+      "start": "Comenzar a Operar",
+      "explore": "Explorar Plataforma"
     }
   }
 }

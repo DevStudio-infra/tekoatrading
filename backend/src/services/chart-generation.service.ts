@@ -81,21 +81,26 @@ export class ChartGenerationService {
         throw new Error("No candlestick data provided");
       }
 
-      const chartBuffer = await this.chartService.generateCandlestickChart(candleData, {
-        title: config.title || `${config.symbol} ${config.timeframe}`,
-        subtitle: config.subtitle || "",
+      // TODO: Implement generateCandlestickChart method in ChartService
+      // For now, use the existing generateChart method and return a placeholder
+      const chartResult = await this.chartService.generateChart({
         symbol: config.symbol,
         timeframe: config.timeframe,
-        includeVolume: config.includeVolume ?? true,
-        includeIndicators: config.includeIndicators ?? true,
         width: config.width || 1200,
         height: config.height || 800,
+        indicators: config.includeIndicators ? ["SMA", "EMA", "RSI"] : [],
+        theme: "dark",
+        botId: "custom-chart", // Placeholder bot ID for custom charts
       });
 
-      return {
-        success: true,
-        chartBuffer,
-      };
+      if (chartResult.success) {
+        return {
+          success: true,
+          chartUrl: chartResult.chartUrl,
+        };
+      } else {
+        throw new Error(chartResult.error || "Chart generation failed");
+      }
     } catch (error) {
       logger.error(`❌ Custom chart generation failed:`, error);
 
@@ -111,7 +116,13 @@ export class ChartGenerationService {
    */
   async uploadChartToStorage(chartBuffer: Buffer, fileName: string): Promise<string> {
     try {
-      return await supabaseStorageService.uploadChart(chartBuffer, fileName);
+      const result = await supabaseStorageService.uploadFile(fileName, chartBuffer, "image/png");
+
+      if (!result.success) {
+        throw new Error(result.error || "Upload failed");
+      }
+
+      return result.publicUrl!;
     } catch (error) {
       logger.error(`❌ Chart upload failed:`, error);
       throw error;

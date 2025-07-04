@@ -63,6 +63,23 @@ export class EnhancedTradingDecisionAgent extends BaseAgent {
     riskData: any;
     accountBalance?: number;
     openPositions?: any[];
+    botTradeHistory?: {
+      recentTrades: any[];
+      lastTrade: any;
+      minutesSinceLastTrade: number | null;
+      tradingFrequency: {
+        last5Minutes: number;
+        last15Minutes: number;
+        last60Minutes: number;
+        total24Hours: number;
+      };
+      openPositions: any[];
+      tradingBehavior: {
+        isOverTrading: boolean;
+        needsCooldown: boolean;
+        recentActivity: boolean;
+      };
+    };
   }): Promise<EnhancedTradingDecision> {
     try {
       console.log(`🤖 Enhanced Trading Decision Agent analyzing ${data.symbol}`);
@@ -79,6 +96,102 @@ export class EnhancedTradingDecisionAgent extends BaseAgent {
         console.log(
           `🤖 Bot: ${data.botConfig.name} - Max Trades: ${data.botConfig.maxOpenTrades}, Risk: ${data.botConfig.maxRiskPercentage}%`,
         );
+      }
+
+      // 🔥 NEW: Check bot trade timing context and over-trading prevention
+      if (data.botTradeHistory) {
+        const history = data.botTradeHistory;
+        console.log(
+          `📊 Trade History: ${history.tradingFrequency.total24Hours} trades in 24h, last trade ${history.minutesSinceLastTrade}min ago`,
+        );
+
+        // CRITICAL: Over-trading prevention
+        if (history.tradingBehavior.isOverTrading) {
+          console.log(`🚨 OVER-TRADING DETECTED: Blocking trade due to excessive frequency`);
+          console.log(`   - Last 5 minutes: ${history.tradingFrequency.last5Minutes} trades`);
+          console.log(`   - Last 15 minutes: ${history.tradingFrequency.last15Minutes} trades`);
+
+          return {
+            action: "hold",
+            quantity: 0,
+            confidence: 0,
+            reasoning: [
+              `Over-trading prevention: ${history.tradingFrequency.last5Minutes} trades in 5min, ${history.tradingFrequency.last15Minutes} in 15min`,
+              "Strategy requires cooling off period to avoid excessive trading",
+              "Wait for clearer market signal or longer time interval",
+            ],
+            technicalAnalysis: {
+              trend: "NEUTRAL",
+              atr: 0,
+              summary: "Over-trading prevention active",
+            },
+            riskAssessment: { riskRewardRatio: 0, positionSize: 0 },
+            orderType: "MARKET",
+            stopLoss: 0,
+            takeProfit: 0,
+            riskRewardRatio: 0,
+            portfolioImpact: { estimatedRisk: 0 },
+            marketConditions: "OVER_TRADING_PREVENTION",
+            strategyAlignment: 0,
+            timeframeSuitability: 0,
+            warnings: ["Over-trading prevention active", "Excessive trade frequency detected"],
+            recommendations: [
+              "Wait for cooling off period",
+              "Look for clearer market signals",
+              "Consider longer timeframes",
+            ],
+            validated: false,
+          };
+        }
+
+        // SCALPING STRATEGY: Require time between trades for position development
+        if (
+          data.strategyConfig?.name?.toLowerCase().includes("scalping") &&
+          history.minutesSinceLastTrade !== null
+        ) {
+          const minCooldownMinutes = data.timeframe === "M1" ? 3 : 5; // Minimum 3 minutes for M1, 5 for others
+
+          if (history.minutesSinceLastTrade < minCooldownMinutes) {
+            console.log(
+              `⏰ SCALPING COOLDOWN: Last trade ${history.minutesSinceLastTrade}min ago, need ${minCooldownMinutes}min minimum`,
+            );
+
+            return {
+              action: "hold",
+              quantity: 0,
+              confidence: 0,
+              reasoning: [
+                `Scalping strategy cooldown: Last trade ${history.minutesSinceLastTrade} minutes ago`,
+                `Minimum ${minCooldownMinutes} minutes required between trades for position development`,
+                "Wait for previous position to develop or close before new entry",
+              ],
+              technicalAnalysis: { trend: "NEUTRAL", atr: 0, summary: "Scalping cooldown active" },
+              riskAssessment: { riskRewardRatio: 0, positionSize: 0 },
+              orderType: "MARKET",
+              stopLoss: 0,
+              takeProfit: 0,
+              riskRewardRatio: 0,
+              portfolioImpact: { estimatedRisk: 0 },
+              marketConditions: "SCALPING_COOLDOWN",
+              strategyAlignment: 0,
+              timeframeSuitability: 0,
+              warnings: ["Scalping cooldown active"],
+              recommendations: [
+                "Wait for position development",
+                "Monitor existing trades",
+                "Look for new signal after cooldown",
+              ],
+              validated: false,
+            };
+          }
+        }
+
+        // LOG RECENT TRADING ACTIVITY FOR CONTEXT
+        if (history.lastTrade) {
+          console.log(
+            `📈 Last Trade: ${history.lastTrade.symbol} ${history.lastTrade.side || "UNKNOWN"} at ${history.lastTrade.entryPrice} (${history.lastTrade.status})`,
+          );
+        }
       }
 
       // Prepare context for professional analysis with strategy rules

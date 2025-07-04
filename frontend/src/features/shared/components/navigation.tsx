@@ -63,6 +63,26 @@ export function Navigation() {
             </Link>
           </div>
 
+          {/* Navigation Links */}
+          <div className="hidden md:flex items-center space-x-6">
+            {!isSignedIn && (
+              <>
+                <Link
+                  href={`/${locale}`}
+                  className="text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {t("home")}
+                </Link>
+                <Link
+                  href={`/${locale}/features`}
+                  className="text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {t("features")}
+                </Link>
+              </>
+            )}
+          </div>
+
           {/* Right side */}
           <div className="flex items-center space-x-4">
             <ThemeToggle />

@@ -10,13 +10,13 @@ async function testBotEvaluation() {
     // Get the first active bot
     const bot = await prisma.bot.findFirst({
       where: {
-        isActive: true
+        isActive: true,
       },
       include: {
         user: true,
         strategy: true,
-        brokerCredential: true
-      }
+        brokerCredential: true,
+      },
     });
 
     if (!bot) {
@@ -46,10 +46,10 @@ async function testBotEvaluation() {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        "0": {
-          "botId": bot.id
-        }
-      })
+        0: {
+          botId: bot.id,
+        },
+      }),
     });
 
     const result = await response.text();
@@ -61,7 +61,6 @@ async function testBotEvaluation() {
     } else {
       console.log("❌ Bot evaluation test failed");
     }
-
   } catch (error) {
     console.error("❌ Test error:", error.message);
   } finally {
@@ -74,14 +73,16 @@ async function testBotServiceDirectly() {
   console.log("\n🔧 Testing Bot Service Directly");
 
   try {
-    // Import the service dynamically
-    const { BotEvaluationService } = require("./dist/services/bot-evaluation.service.js");
+    // Import the Enhanced service dynamically
+    const {
+      EnhancedBotEvaluationService,
+    } = require("./dist/services/enhanced-bot-evaluation.service.js");
 
-    const botService = new BotEvaluationService();
+    const botService = new EnhancedBotEvaluationService();
 
     // Get a bot ID
     const bot = await prisma.bot.findFirst({
-      where: { isActive: true }
+      where: { isActive: true },
     });
 
     if (!bot) {
@@ -94,7 +95,6 @@ async function testBotServiceDirectly() {
     const result = await botService.evaluateBot(bot.id);
 
     console.log("Direct evaluation result:", JSON.stringify(result, null, 2));
-
   } catch (error) {
     console.error("❌ Direct service test error:", error.message);
     console.error("Stack:", error.stack);

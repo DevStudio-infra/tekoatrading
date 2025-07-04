@@ -1,6 +1,7 @@
 {
   "common": {
     "home": "Home",
+    "features": "Features",
     "dashboard": "Dashboard",
     "bots": "Trading Bots",
     "portfolio": "Portfolio",
@@ -117,6 +118,109 @@
     "signUp": {
       "title": "Create account",
       "subtitle": "Get started with your trading journey"
+    }
+  },
+  "features": {
+    "hero": {
+      "badge": "Professional AI Trading",
+      "title": "Next-Generation Trading Intelligence",
+      "subtitle": "Experience the power of our Professional Trading Committee - a sophisticated multi-agent AI system that makes trading decisions like a team of expert traders working together.",
+      "getStarted": "Start Trading Now",
+      "viewDemo": "View Demo"
+    },
+    "professionalSection": {
+      "title": "Professional Trading Committee",
+      "subtitle": "Five specialized AI agents working together to deliver institutional-grade trading decisions with precision and reliability."
+    },
+    "committee": {
+      "title": "Multi-Agent Committee",
+      "description": "Five expert AI agents collaborate like a professional trading desk to analyze every opportunity from multiple perspectives before making decisions.",
+      "badge": "Core System",
+      "benefits": {
+        "technical": "Technical Analysis specialist evaluates chart patterns and market signals",
+        "risk": "Portfolio Risk manager optimizes position sizing and exposure limits",
+        "timing": "Temporal Reasoning agent identifies optimal entry and exit timing",
+        "consensus": "Decision Coordinator synthesizes all recommendations for final approval"
+      }
+    },
+    "aiDecisions": {
+      "title": "Intelligent Decision Making",
+      "description": "Our AI doesn't just follow simple rules - it understands market context, remembers recent trades, and adapts to changing conditions in real-time.",
+      "badge": "Smart AI",
+      "benefits": {
+        "contextAware": "Remembers your trading history and avoids over-trading",
+        "adaptable": "Adjusts strategy based on market volatility and conditions",
+        "learning": "Continuously improves from market feedback and performance",
+        "professional": "Makes decisions like experienced institutional traders"
+      }
+    },
+    "riskManagement": {
+      "title": "Advanced Risk Protection",
+      "description": "Institutional-grade risk management that protects your capital with sophisticated position sizing and exposure monitoring.",
+      "badge": "Protection",
+      "benefits": {
+        "institutional": "Bank-level risk controls and position limits",
+        "realTime": "Live monitoring of account balance and open positions",
+        "drawdown": "Automatic drawdown protection and correlation analysis",
+        "sizing": "Professional position sizing prevents dangerous over-exposure"
+      }
+    },
+    "advancedSection": {
+      "title": "Advanced Trading Features",
+      "subtitle": "Cutting-edge technology that gives you the edge in today's competitive markets."
+    },
+    "positionAwareness": {
+      "title": "Position Awareness",
+      "description": "Real-time monitoring of all your positions and intelligent trade spacing to prevent over-trading and optimize performance."
+    },
+    "temporalReasoning": {
+      "title": "Market Timing Intelligence",
+      "description": "Advanced algorithms analyze market sessions, liquidity patterns, and timing factors to execute trades at optimal moments."
+    },
+    "marketIntelligence": {
+      "title": "Market Intelligence",
+      "description": "Comprehensive market analysis including sentiment, volatility assessment, and macro-economic factors that impact your trades."
+    },
+    "professionalSizing": {
+      "title": "Professional Position Sizing",
+      "description": "Sophisticated algorithms calculate optimal position sizes based on account balance, risk tolerance, and market conditions."
+    },
+    "realTimeSync": {
+      "title": "Real-Time Synchronization",
+      "description": "Live connection to your broker account for accurate balance tracking, position monitoring, and instant trade execution."
+    },
+    "instantExecution": {
+      "title": "Lightning-Fast Execution",
+      "description": "Ultra-low latency trade execution with professional-grade order management and risk controls."
+    },
+    "benefits": {
+      "title": "Why Traders Choose Our Platform",
+      "subtitle": "Experience the difference that professional-grade AI trading technology makes.",
+      "precision": {
+        "title": "Precision Trading",
+        "description": "Our multi-agent system eliminates emotional decisions and human error, delivering consistent, data-driven trading performance."
+      },
+      "protection": {
+        "title": "Capital Protection",
+        "description": "Advanced risk management protects your investments with institutional-grade position sizing and exposure controls."
+      },
+      "intelligence": {
+        "title": "Market Intelligence",
+        "description": "Stay ahead of the market with AI that understands complex market dynamics and adapts to changing conditions."
+      },
+      "stats": {
+        "title": "Professional Performance",
+        "agents": "AI Agents",
+        "monitoring": "Monitoring",
+        "uptime": "Uptime",
+        "execution": "Execution"
+      }
+    },
+    "cta": {
+      "title": "Ready to Trade Like a Professional?",
+      "subtitle": "Join thousands of traders who trust our Professional Trading Committee to manage their portfolios.",
+      "start": "Start Trading",
+      "explore": "Explore Platform"
     }
   }
 }

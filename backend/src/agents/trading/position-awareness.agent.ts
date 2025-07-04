@@ -76,7 +76,7 @@ export class PositionAwarenessAgent extends BaseAgent {
       const openPositions = await this.getOpenPositions(params.capitalApi, params.botId);
 
       // Get symbol-specific positions
-      const symbolPositions = openPositions.filter((p) => p.symbol === params.symbol);
+      const symbolPositions = openPositions.filter((p: any) => p.symbol === params.symbol);
 
       // Calculate risk metrics with real-time data
       const riskMetrics = this.calculateRiskMetrics(openPositions, params);
@@ -155,8 +155,8 @@ export class PositionAwarenessAgent extends BaseAgent {
       logger.info(`[POSITION-AWARENESS] Position mapping debug:`, {
         rawPositionsCount: livePositions.length,
         mappedPositionsCount: mappedPositions.length,
-        symbols: mappedPositions.map((p) => p.symbol),
-        directions: mappedPositions.map((p) => p.side),
+        symbols: mappedPositions.map((p: any) => p.symbol),
+        directions: mappedPositions.map((p: any) => p.side),
       });
 
       return mappedPositions;
@@ -256,9 +256,9 @@ export class PositionAwarenessAgent extends BaseAgent {
     symbolPositions: any[],
     metrics: any,
   ) {
+    let canTrade = true;
     const reasoning: string[] = [];
     const recommendations: string[] = [];
-    let canTrade = true;
 
     // Use bot-configured limits (from database) with conservative fallbacks
     // For accounts with many existing positions, be more conservative
@@ -327,33 +327,22 @@ export class PositionAwarenessAgent extends BaseAgent {
       recommendations.push(`Reduce overall portfolio exposure below ${maxPortfolioExposure}%`);
     }
 
-    // Rule 4: Timeframe-based cooldown (reasonable limits)
-    const minimumCooldown = this.getMinimumCooldown(params.timeframe);
-    if (metrics.timeSinceLastTrade < minimumCooldown) {
-      canTrade = false;
-      const remainingCooldown = Math.ceil(
-        (minimumCooldown - metrics.timeSinceLastTrade) / 1000 / 60,
+    // Rule 4: Strategy-based frequency limits instead of arbitrary cooldowns
+    // Only apply if strategy specifies "maxTrades" with frequency limits
+    if (
+      params.strategyConfig?.riskManagement?.maxTrades &&
+      params.strategyConfig.riskManagement.maxTrades.includes("volatile")
+    ) {
+      // For strategies that specify "only in volatile markets", check actual market volatility
+      // instead of arbitrary time-based cooldowns
+      logger.info(
+        `[POSITION-AWARENESS] Strategy specifies volatile market conditions - checking market regime`,
       );
-      reasoning.push(
-        `Trading cooldown: ${remainingCooldown} minutes remaining for ${params.timeframe} timeframe`,
-      );
-      recommendations.push(`Wait ${remainingCooldown} minutes before next trade`);
+      reasoning.push("Strategy-based frequency: requires volatile market conditions");
+      recommendations.push("Strategy will only trade during appropriate market conditions");
     }
 
-    // Rule 5: DAILY TRADE LIMIT - MAX 3 TRADES PER DAY
-    const todayTrades = await this.getDailyTradeCount(params.userId, params.botId);
-    const maxDailyTrades = 3;
-
-    if (todayTrades >= maxDailyTrades) {
-      canTrade = false;
-      reasoning.push(
-        `🚨 DAILY LIMIT REACHED: ${todayTrades}/${maxDailyTrades} trades today - NO MORE TRADES ALLOWED`,
-      );
-      recommendations.push("Wait until tomorrow to trade again");
-      logger.warn(`[POSITION-AWARENESS] 🚨 DAILY LIMIT: ${todayTrades} trades today - BLOCKING`);
-    }
-
-    // Rule 6: Symbol exposure limit (use strategy risk percentage)
+    // Rule 5: Symbol exposure limit (use strategy risk percentage)
     const maxSymbolExposure = strategyMaxRiskPercentage * 5; // Allow multiple positions on same symbol within reason
     const symbolExposurePercent = (metrics.symbolExposure / params.accountBalance) * 100;
     if (symbolExposurePercent > maxSymbolExposure) {
@@ -366,9 +355,9 @@ export class PositionAwarenessAgent extends BaseAgent {
 
     // Positive recommendations when trade is allowed
     if (canTrade) {
-      reasoning.push("All position limits satisfied");
+      reasoning.push("All position limits satisfied - strategy logic determines trade timing");
       if (metrics.totalOpenPositions === 0) {
-        recommendations.push("First position - good opportunity to start trading");
+        recommendations.push("First position - strategy conditions will determine entry");
       } else {
         recommendations.push(
           `Portfolio diversification: ${metrics.totalOpenPositions}/${maxOpenTrades} positions`,

@@ -47,7 +47,16 @@ export class MarketValidationService {
       // Try to get market data including opening hours and status
       let marketDetails;
       try {
+        logger.debug(`📊 Requesting market data for epic: ${epic}`);
         marketDetails = await capitalApi.getMarketData(epic);
+
+        if (marketDetails) {
+          logger.debug(`✅ Market data received for ${epic}:`, {
+            status: marketDetails.marketStatus,
+          });
+        } else {
+          logger.debug(`⚠️ Market data call returned null/undefined for epic: ${epic}`);
+        }
       } catch (error: any) {
         logger.warn(`Market data API failed for epic ${epic}: ${error.message}`);
         // For crypto markets, be more lenient since they're typically 24/7
@@ -62,12 +71,19 @@ export class MarketValidationService {
       }
 
       if (!marketDetails) {
-        logger.warn(`No market data returned for epic ${epic}`);
-        // For crypto markets, be more lenient
+        // More detailed logging for null market data
         if (this.isCryptoMarket(symbol)) {
-          return { allowed: true, reason: "Crypto market assumed tradeable" };
+          logger.info(
+            `🔄 No market data for crypto ${symbol} (${epic}) - this is normal for 24/7 crypto markets, assuming tradeable`,
+          );
+          return {
+            allowed: true,
+            reason: "Crypto market assumed 24/7 tradeable (no market data needed)",
+          };
+        } else {
+          logger.warn(`❌ No market data returned for non-crypto market ${symbol} (${epic})`);
+          return { allowed: false, reason: "Could not get market details for non-crypto market" };
         }
-        return { allowed: false, reason: "Could not get market details" };
       }
 
       // Check market status directly from Market interface
