@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { router, publicProcedure } from "../trpc";
 import { botEvaluationService } from "../services/bot-evaluation.service";
+import { creditService } from "../services/credit-management.service";
 import { logger } from "../logger";
 
 export const evaluationsRouter = router({
@@ -49,7 +50,40 @@ export const evaluationsRouter = router({
         throw new Error("Bot not found or unauthorized");
       }
 
+      // 💳 CHECK CREDITS BEFORE EVALUATION
+      const canAfford = await creditService.canAffordEvaluation(userId, 1);
+      if (!canAfford) {
+        const userCredits = await creditService.getUserCredits(userId);
+        const currentCredits = userCredits?.totalCredits || 0;
+        logger.warn(
+          `⚠️ Insufficient credits for evaluation: User ${userId} has ${currentCredits} credits`,
+        );
+        throw new Error(
+          `Insufficient credits. You need 1 credit to run an evaluation. You currently have ${currentCredits} credits. Please purchase more credits or wait for your monthly reset.`,
+        );
+      }
+
+      // Run the evaluation
       const result = await botEvaluationService.evaluateBot(input.botId);
+
+      // 💰 DEDUCT CREDITS AFTER SUCCESSFUL EVALUATION
+      if (result.success) {
+        const deductionSuccess = await creditService.deductCredits(
+          userId,
+          1,
+          `Bot evaluation: ${bot.name} (${bot.tradingPairSymbol})`,
+          result.evaluationId || input.botId,
+        );
+
+        if (!deductionSuccess) {
+          logger.error(
+            `❌ Failed to deduct credits for user ${userId} after successful evaluation`,
+          );
+          // Don't throw error as evaluation was successful, just log
+        } else {
+          logger.info(`✅ Successfully deducted 1 credit for user ${userId} after evaluation`);
+        }
+      }
 
       logger.info(
         `Bot evaluation completed for ${input.botId}: ${result.success ? "Success" : "Failed"}`,
@@ -58,7 +92,7 @@ export const evaluationsRouter = router({
       return result;
     } catch (error) {
       logger.error("Error running bot evaluation:", error);
-      throw new Error("Failed to run bot evaluation");
+      throw new Error(error instanceof Error ? error.message : "Failed to run bot evaluation");
     }
   }),
 

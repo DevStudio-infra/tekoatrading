@@ -9,20 +9,24 @@ datasource db {
 }
 
 model User {
-  id                String             @id @default(cuid())
-  email             String             @unique
-  name              String?
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-  clerkId           String?            @unique @map("clerk_id")
-  bots              Bot[]
-  brokerCredentials BrokerCredential[]
-  evaluations       Evaluation[]
-  marketData        MarketData[]
-  notifications     Notification[]
-  portfolios        Portfolio[]
-  strategies        Strategy[]
-  trades            Trade[]
+  id                 String              @id @default(cuid())
+  email              String              @unique
+  name               String?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  clerkId            String?             @unique @map("clerk_id")
+  bots               Bot[]
+  brokerCredentials  BrokerCredential[]
+  evaluations        Evaluation[]
+  marketData         MarketData[]
+  notifications      Notification[]
+  portfolios         Portfolio[]
+  strategies         Strategy[]
+  trades             Trade[]
+  // Pricing system relations
+  credits            UserCredits?
+  subscription       UserSubscription?
+  creditTransactions CreditTransaction[]
 
   @@map("users")
 }
@@ -284,4 +288,99 @@ model ChartImage {
   expiresAt DateTime?
 
   @@map("chart_images")
+}
+
+// ============================================================================
+// PRICING SYSTEM MODELS
+// ============================================================================
+
+model UserCredits {
+  id               String    @id @default(cuid())
+  userId           String    @unique
+  totalCredits     Int       @default(0)
+  monthlyCredits   Int       @default(0)
+  purchasedCredits Int       @default(0)
+  creditsUsed      Int       @default(0)
+  lastMonthlyReset DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_credits")
+}
+
+model UserSubscription {
+  id                   String             @id @default(cuid())
+  userId               String             @unique
+  stripeSubscriptionId String?            @unique
+  stripeCustomerId     String?
+  planType             PlanType           @default(FREE)
+  status               SubscriptionStatus @default(ACTIVE)
+  currentPeriodStart   DateTime?
+  currentPeriodEnd     DateTime?
+  cancelAtPeriodEnd    Boolean            @default(false)
+  billingCycle         BillingCycle       @default(MONTHLY)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_subscriptions")
+}
+
+model CreditTransaction {
+  id                    String          @id @default(cuid())
+  userId                String
+  transactionType       TransactionType
+  amount                Int
+  remainingBalance      Int
+  description           String?
+  evaluationId          String?
+  stripePaymentIntentId String?
+  createdAt             DateTime        @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("credit_transactions")
+}
+
+model CreditPackage {
+  id         String   @id @default(cuid())
+  name       String
+  credits    Int
+  priceCents Int
+  userType   PlanType
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  @@map("credit_packages")
+}
+
+// ============================================================================
+// PRICING SYSTEM ENUMS
+// ============================================================================
+
+enum PlanType {
+  FREE
+  PRO
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELED
+  PAST_DUE
+  INCOMPLETE
+}
+
+enum BillingCycle {
+  MONTHLY
+  YEARLY
+}
+
+enum TransactionType {
+  EARNED
+  PURCHASED
+  USED
+  EXPIRED
 }

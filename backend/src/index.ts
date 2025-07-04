@@ -7,6 +7,9 @@ import { createContext } from "./trpc";
 import { logger } from "./logger";
 import clerkWebhookRouter from "./routes/clerk-webhook.routes";
 import { schedulerService } from "./services/scheduler.service";
+import creditsRouter from "./routers/credits";
+import subscriptionsRouter from "./routers/subscriptions";
+import stripeRouter from "./routers/stripe";
 
 dotenv.config();
 
@@ -28,6 +31,11 @@ app.get("/health", (req, res) => {
 
 // Add Clerk webhook route
 app.use("/api/clerk-webhook", clerkWebhookRouter);
+
+// Add pricing system routes
+app.use("/api/credits", creditsRouter);
+app.use("/api/subscriptions", subscriptionsRouter);
+app.use("/api/stripe", stripeRouter);
 
 app.use(
   "/trpc",
