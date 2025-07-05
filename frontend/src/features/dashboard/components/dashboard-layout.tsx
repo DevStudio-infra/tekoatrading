@@ -48,7 +48,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                       isActive && "bg-primary text-primary-foreground",
                     )}
                   >
-                    <Link href={item.href}>
+                    <Link href={item.href as any}>
                       <IconComponent className="mr-2 h-4 w-4" />
                       {item.label}
                     </Link>

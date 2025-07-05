@@ -9,8 +9,12 @@ import { PositionAwarenessAgent } from "../agents/trading/position-awareness.age
 import { PositionContextEvaluationAgent } from "../agents/trading/position-context-evaluation.agent";
 import { DynamicTradeManagerAgent } from "../agents/trading/dynamic-trade-manager.agent";
 import { EnhancedTradingDecisionAgent } from "../ai/enhanced-trading-decision-agent";
+import { OrderTypeSelectionService } from "./order-type-selection.service";
+import { PendingOrderMonitorService } from "./pending-order-monitor.service";
+import { BrokerIntegrationService } from "./broker-integration.service";
 import { ChartService } from "../modules/chart/index";
 import { CandleData } from "../agents/core/technical-analysis.agent";
+import { advancedRiskManagementAgent } from "../agents/risk/advanced-risk-management.agent";
 
 export interface EnhancedBotEvaluationResult {
   success: boolean;
@@ -49,6 +53,9 @@ export class EnhancedBotEvaluationService {
   private positionContextEvaluationAgent: PositionContextEvaluationAgent;
   private dynamicTradeManagerAgent: DynamicTradeManagerAgent;
   private enhancedTradingAgent: EnhancedTradingDecisionAgent;
+  private orderTypeSelectionService: OrderTypeSelectionService;
+  private pendingOrderMonitorService: PendingOrderMonitorService;
+  private brokerIntegrationService: BrokerIntegrationService;
   private chartService: ChartService;
   private capitalApiInstances: Map<string, any> = new Map();
 
@@ -60,7 +67,26 @@ export class EnhancedBotEvaluationService {
     this.positionContextEvaluationAgent = new PositionContextEvaluationAgent();
     this.dynamicTradeManagerAgent = new DynamicTradeManagerAgent();
     this.enhancedTradingAgent = new EnhancedTradingDecisionAgent();
+    this.orderTypeSelectionService = new OrderTypeSelectionService();
+    this.brokerIntegrationService = new BrokerIntegrationService();
+    this.pendingOrderMonitorService = new PendingOrderMonitorService(this.brokerIntegrationService);
     this.chartService = new ChartService();
+  }
+
+  /**
+   * Initialize the service - start pending order monitoring
+   */
+  async initialize(): Promise<void> {
+    await this.pendingOrderMonitorService.startMonitoring();
+    logger.info("✅ Enhanced Bot Evaluation Service initialized");
+  }
+
+  /**
+   * Shutdown the service - stop pending order monitoring
+   */
+  async shutdown(): Promise<void> {
+    await this.pendingOrderMonitorService.stopMonitoring();
+    logger.info("🛑 Enhanced Bot Evaluation Service shutdown");
   }
 
   /**
@@ -548,156 +574,201 @@ export class EnhancedBotEvaluationService {
   }
 
   /**
-   * Execute professional trade with advanced order management
+   * Execute trade with professional risk management from committee decision
    */
-  private async executeProfessionalTrade(
-    bot: any,
-    capitalApi: any,
-    orderDecision: any,
-    analysis: any,
-    evaluationId: string,
-  ): Promise<{ success: boolean; orderDetails?: any; error?: string }> {
+  private async executeTradeWithProfessionalRisk(params: {
+    analysis: any;
+    bot: any;
+    marketPrice: any;
+    portfolioContext: any;
+    positionCheck: any;
+  }): Promise<{ success: boolean; data?: any; error?: string }> {
     try {
-      // Validate order decision
-      if (!orderDecision || typeof orderDecision !== "object") {
-        throw new Error("Invalid order decision object");
+      logger.info(`🚀 Executing professional trade with committee decision...`);
+
+      // 🚨 CRITICAL FIX: Use same key generation as setupCapitalApi
+      const brokerCredential = params.bot.user?.brokerCredentials?.[0];
+
+      if (!brokerCredential || !brokerCredential.credentials) {
+        return {
+          success: false,
+          error: "No broker credentials configured for trade execution",
+        };
       }
 
-      // Log order decision for debugging
-      if (orderDecision) {
-        logger.info(`🔍 Order Decision Structure:`, {
-          orderType: orderDecision.orderType || "undefined",
-          positionSize: orderDecision.positionSize || "undefined",
-          entryPrice: orderDecision.entryPrice || "undefined",
-          stopLoss: orderDecision.stopLoss || "undefined",
-          takeProfit: orderDecision.takeProfit || "undefined",
-          reasoning: orderDecision.reasoning
-            ? orderDecision.reasoning.substring(0, 100) + "..."
-            : "undefined",
-          strategyCompliant: orderDecision.strategyCompliance?.isCompliant || "undefined",
-          riskScore: orderDecision.riskAssessment?.riskScore || "undefined",
-        });
-      } else {
-        logger.error(`❌ Order Decision is null/undefined!`);
+      const credentials = credentialsEncryption.decryptCredentials(brokerCredential.credentials);
+      const cacheKey = `${params.bot.id}-${credentials.apiKey.slice(-8)}`;
+
+      // Get Capital.com API instance using correct key
+      const capitalApi = this.capitalApiInstances.get(cacheKey);
+
+      if (!capitalApi) {
+        return {
+          success: false,
+          error: "Capital.com API not available for trade execution",
+        };
       }
 
-      // Validate required fields
-      if (!orderDecision.positionSize || orderDecision.positionSize <= 0) {
-        throw new Error(`Invalid position size: ${orderDecision.positionSize}`);
-      }
+      // Create evaluation record
+      const evaluation = await this.createEvaluationRecord(
+        params.bot.id,
+        params.bot.userId || params.bot.user?.id || "unknown",
+        "chart://professional-committee",
+        params.analysis,
+        params.portfolioContext,
+        {
+          approved: true,
+          positionSize: params.analysis.positionSize,
+          reasoning: params.analysis.reasoning.join("; "),
+          strategyCompliance: { isCompliant: true },
+        },
+        params.bot.tradingPairSymbol,
+        params.bot.timeframe,
+      );
 
-      // 🚨 MANDATORY STOP LOSS VALIDATION
-      if (!orderDecision.stopLoss || orderDecision.stopLoss <= 0) {
-        throw new Error(
-          `🚨 MANDATORY STOP LOSS MISSING: Every trade MUST have a stop loss. Got: ${orderDecision.stopLoss}`,
-        );
-      }
-
-      // 🚨 MANDATORY TAKE PROFIT VALIDATION
-      if (!orderDecision.takeProfit || orderDecision.takeProfit <= 0) {
-        throw new Error(
-          `🚨 MANDATORY TAKE PROFIT MISSING: Every trade MUST have a take profit. Got: ${orderDecision.takeProfit}`,
-        );
-      }
-
-      // Debug the position size conversion
-      logger.info(`🔍 Position Size Debug:`, {
-        originalPositionSize: orderDecision.positionSize,
-        typeOfPositionSize: typeof orderDecision.positionSize,
-        isNaN: isNaN(orderDecision.positionSize),
-        accountBalance: analysis.accountBalance || "undefined",
-        fromRiskAssessment: orderDecision.riskAssessment?.optimalPositionSize || "undefined",
-        afterMathAbs: Math.abs(orderDecision.positionSize || 0.001),
-        afterMathMax: Math.max(0.001, Math.abs(orderDecision.positionSize || 0.001)),
+      // Get AI-recommended order type with market analysis
+      const orderTypeRecommendation = await this.orderTypeSelectionService.recommendOrderType({
+        direction: params.analysis.direction || "BUY",
+        currentPrice: params.marketPrice?.price || 99000,
+        aiConfidence: params.analysis.confidence || 0.7,
+        candleData: params.analysis.candleData || [],
+        technicalAnalysis: params.analysis.technicalAnalysis || {},
+        marketIntelligence: params.analysis.marketIntelligence || {},
+        timeframe: params.bot.timeframe || "M1",
+        symbol: params.bot.tradingPairSymbol || "BTC/USD",
       });
 
-      // Construct professional trade request
-      const tradeRequest: TradeExecutionRequest = {
-        botId: bot.id,
-        analysis,
-        orderType: "MARKET", // Force MARKET for reliability
-        entryPrice: orderDecision.entryPrice,
-        stopLoss: orderDecision.stopLoss || 0,
-        takeProfit: orderDecision.takeProfit || 0,
-        positionSize: orderDecision.positionSize,
-        direction: orderDecision.direction || "BUY", // Use direction from order decision
-        timeframe: bot.timeframe,
-        riskAssessment: orderDecision.riskAssessment || { riskScore: 5 },
-      };
+      logger.info(
+        `🎯 Order type recommendation: ${orderTypeRecommendation.orderType} (${orderTypeRecommendation.confidence}% confidence)`,
+      );
+      logger.info(`📊 Reasoning: ${orderTypeRecommendation.reasoning}`);
 
-      // Normalize and convert symbol to Capital.com epic
-      const normalizedSymbol = bot.tradingPairSymbol.replace(/[^A-Z]/g, ""); // Remove slashes, etc.
-      const epic = this.convertSymbolToTradingEpic(normalizedSymbol);
+      // 🚨 CRITICAL FIX: Define required variables before using them
+      const epic = this.convertSymbolToTradingEpic(params.bot.tradingPairSymbol);
+      const cleanSize = Math.abs(params.analysis.positionSize || 0.001);
+      const cleanStopLoss = params.analysis.stopLoss || undefined;
+      const cleanTakeProfit = params.analysis.takeProfit || undefined;
 
-      // Validate and clean order decision values
-      // Use the correctly calculated position size from Professional Position Sizing Agent
-      // Apply Capital.com position size validation to prevent RISK_CHECK rejections
-      let cleanSize = Math.abs(orderDecision.positionSize || 0.0001);
+      logger.info(
+        `📊 Epic: ${epic}, Size: ${cleanSize}, SL: ${cleanStopLoss}, TP: ${cleanTakeProfit}`,
+      );
 
-      // Ensure position size is within Capital.com acceptable range
-      if (cleanSize < 0.0001) {
-        cleanSize = 0.0001; // Minimum for micro lots
-      } else if (cleanSize > 0.1) {
-        cleanSize = 0.1; // Maximum for safety
-      }
-
-      // Round to 4 decimal places for Capital.com API
-      cleanSize = Math.round(cleanSize * 10000) / 10000;
-      const cleanStopLoss =
-        orderDecision.stopLoss && orderDecision.stopLoss > 0 ? orderDecision.stopLoss : null;
-
-      // Fix take profit validation for Capital.com minimum requirements
-      let cleanTakeProfit: number | null = null;
-      if (orderDecision.takeProfit && orderDecision.takeProfit > 0) {
-        // 🚨 CRITICAL FIX: Realistic take profit validation for scalping strategies
-        const currentPrice = analysis.marketPrice?.price || 99000;
-        const minTakeProfit = currentPrice * 1.005; // 0.5% minimum (realistic for scalping)
-        const maxTakeProfit = currentPrice * 1.5; // 50% maximum (prevent extreme values)
-
-        if (
-          orderDecision.takeProfit >= minTakeProfit &&
-          orderDecision.takeProfit <= maxTakeProfit
-        ) {
-          cleanTakeProfit = orderDecision.takeProfit;
-          logger.info(
-            `✅ Take profit validated: ${orderDecision.takeProfit} (${((orderDecision.takeProfit / currentPrice - 1) * 100).toFixed(2)}% profit)`,
-          );
-        } else if (orderDecision.takeProfit < minTakeProfit) {
+      // Handle different order types
+      let orderResult;
+      if (orderTypeRecommendation.orderType === "MARKET") {
+        // Execute market order immediately
+        orderResult = await capitalApi.createPosition(
+          epic,
+          params.analysis.direction || "BUY",
+          cleanSize,
+          cleanStopLoss || undefined,
+          cleanTakeProfit || undefined,
+        );
+      } else if (orderTypeRecommendation.orderType === "LIMIT") {
+        // Create limit order (working order)
+        if (!orderTypeRecommendation.limitPrice) {
           logger.warn(
-            `⚠️ Take profit ${orderDecision.takeProfit} below minimum ${minTakeProfit.toFixed(2)} (0.5% profit) - removing take profit`,
+            "⚠️ Limit order recommended but no limit price calculated, falling back to market order",
           );
-          cleanTakeProfit = null;
+          orderResult = await capitalApi.createPosition(
+            epic,
+            params.analysis.direction || "BUY",
+            cleanSize,
+            cleanStopLoss || undefined,
+            cleanTakeProfit || undefined,
+          );
         } else {
-          logger.warn(
-            `⚠️ Take profit ${orderDecision.takeProfit} above maximum ${maxTakeProfit.toFixed(2)} (50% profit) - capping take profit`,
+          orderResult = await capitalApi.createLimitOrder(
+            epic,
+            params.analysis.direction || "BUY",
+            cleanSize,
+            orderTypeRecommendation.limitPrice,
+            cleanStopLoss,
+            cleanTakeProfit,
           );
-          cleanTakeProfit = maxTakeProfit;
+
+          // Add to pending order monitoring
+          await this.pendingOrderMonitorService.addPendingOrder({
+            botId: params.bot.id,
+            userId: params.bot.userId || "unknown",
+            symbol: params.bot.tradingPairSymbol || "UNKNOWN",
+            side: params.analysis.direction || "BUY",
+            type: "LIMIT",
+            size: cleanSize,
+            price: orderTypeRecommendation.limitPrice,
+            stopLevel: cleanStopLoss,
+            profitLevel: cleanTakeProfit,
+            status: "PENDING",
+            brokerOrderId: orderResult.dealReference,
+            timeInForce: "GTC",
+          });
+        }
+      } else if (orderTypeRecommendation.orderType === "STOP") {
+        // Create stop order (working order)
+        if (!orderTypeRecommendation.stopPrice) {
+          logger.warn(
+            "⚠️ Stop order recommended but no stop price calculated, falling back to market order",
+          );
+          orderResult = await capitalApi.createPosition(
+            epic,
+            params.analysis.direction || "BUY",
+            cleanSize,
+            cleanStopLoss || undefined,
+            cleanTakeProfit || undefined,
+          );
+        } else {
+          orderResult = await capitalApi.createStopOrder(
+            epic,
+            params.analysis.direction || "BUY",
+            cleanSize,
+            orderTypeRecommendation.stopPrice,
+            cleanStopLoss,
+            cleanTakeProfit,
+          );
+
+          // Add to pending order monitoring
+          await this.pendingOrderMonitorService.addPendingOrder({
+            botId: params.bot.id,
+            userId: params.bot.userId || "unknown",
+            symbol: params.bot.tradingPairSymbol || "UNKNOWN",
+            side: params.analysis.direction || "BUY",
+            type: "STOP",
+            size: cleanSize,
+            price: orderTypeRecommendation.stopPrice,
+            stopLevel: cleanStopLoss,
+            profitLevel: cleanTakeProfit,
+            status: "PENDING",
+            brokerOrderId: orderResult.dealReference,
+            timeInForce: "GTC",
+          });
         }
       }
 
-      // Create position request for Capital.com API
+      // Create position request for logging (updated)
       const positionRequest = {
         epic: epic,
-        direction: "BUY",
-        orderType: "MARKET", // Force MARKET orders for now
+        direction: params.analysis.direction || "BUY",
+        orderType: orderTypeRecommendation.orderType,
         size: cleanSize,
-        level: undefined, // No level for market orders
+        level: orderTypeRecommendation.limitPrice || orderTypeRecommendation.stopPrice,
         stopLevel: cleanStopLoss,
         profitLevel: cleanTakeProfit,
         timeInForce: "GTC",
         guaranteedStop: false,
         forceOpen: true,
         currencyCode: "USD",
+        reasoning: orderTypeRecommendation.reasoning,
       };
 
       logger.info(`📋 Professional Position Request:`, {
         epic,
-        direction: "BUY",
-        orderType: "MARKET",
+        direction: params.analysis.direction || "BUY",
+        orderType: orderTypeRecommendation.orderType,
         size: cleanSize,
+        level: orderTypeRecommendation.limitPrice || orderTypeRecommendation.stopPrice,
         stopLevel: cleanStopLoss,
         profitLevel: cleanTakeProfit,
-        reasoning: orderDecision.reasoning || "No reasoning provided",
+        reasoning: orderTypeRecommendation.reasoning,
       });
 
       // Log full request for debugging
@@ -706,70 +777,61 @@ export class EnhancedBotEvaluationService {
       // Log exactly what we're sending to Capital.com API
       logger.info(`📤 Capital.com API Call Parameters:`, {
         epic,
-        direction: "BUY",
+        direction: params.analysis.direction || "BUY",
         size: cleanSize,
         stopLevel: cleanStopLoss || undefined,
         profitLevel: cleanTakeProfit || undefined,
-        orderType: "MARKET",
+        orderType: orderTypeRecommendation.orderType,
         forceOpen: true,
       });
-
-      // Execute the trade with correct parameter structure
-      const tradeResult = await capitalApi.createPosition(
-        epic,
-        "BUY",
-        cleanSize,
-        cleanStopLoss || undefined,
-        cleanTakeProfit || undefined,
-      );
 
       // 🚨 CRITICAL FIX: Capital.com API returns DealConfirmation, not {success: boolean}
       // Check dealStatus and status instead of non-existent 'success' property
       const isTradeSuccessful =
-        tradeResult &&
-        (tradeResult.dealStatus === "ACCEPTED" ||
-          tradeResult.status === "OPEN" ||
-          tradeResult.dealReference); // Has deal reference means request was accepted
+        orderResult &&
+        (orderResult.dealStatus === "ACCEPTED" ||
+          orderResult.status === "OPEN" ||
+          orderResult.dealReference); // Has deal reference means request was accepted
 
       logger.info(`🔍 Trade Success Detection:`, {
-        dealStatus: tradeResult?.dealStatus,
-        status: tradeResult?.status,
-        dealReference: tradeResult?.dealReference,
-        dealId: tradeResult?.dealId,
+        dealStatus: orderResult?.dealStatus,
+        status: orderResult?.status,
+        dealReference: orderResult?.dealReference,
+        dealId: orderResult?.dealId,
         isTradeSuccessful,
-        fullTradeResult: tradeResult,
+        fullTradeResult: orderResult,
       });
 
       if (isTradeSuccessful) {
         // Mark order as filled in coordinator
-        await this.professionalOrderManager.getOrderStatistics(bot.id).then(() => {
+        await this.professionalOrderManager.getOrderStatistics(params.bot.id).then(() => {
           // Order filled successfully
-          logger.info(`✅ Trade executed successfully for ${bot.tradingPairSymbol}`);
+          logger.info(`✅ Trade executed successfully for ${params.bot.tradingPairSymbol}`);
         });
 
         // Create trade record with validated data
         const tradeRecord = await prisma.trade.create({
           data: {
-            userId: bot.userId || "unknown",
-            botId: bot.id,
-            evaluationId,
-            symbol: bot.tradingPairSymbol || "UNKNOWN",
-            side: "BUY",
-            entryPrice: orderDecision.entryPrice || analysis.marketPrice?.price || 99000,
+            userId: params.bot.userId || "unknown",
+            botId: params.bot.id,
+            evaluationId: evaluation.id,
+            symbol: params.bot.tradingPairSymbol || "UNKNOWN",
+            side: params.analysis.direction || "BUY",
+            entryPrice: params.analysis.entryPrice || params.marketPrice.price || 99000,
             stopLoss: cleanStopLoss || 0,
             takeProfit: cleanTakeProfit || 0,
             size: cleanSize,
-            status: "OPEN",
-            type: "MARKET",
-            confidence: Math.min(1.0, Math.max(0.0, orderDecision.confidence || 0.7)),
-            reason: orderDecision.reasoning || "Professional order management decision",
-            brokerTradeId: tradeResult.dealId || tradeResult.dealReference || `local-${Date.now()}`,
+            status: orderTypeRecommendation.orderType === "MARKET" ? "OPEN" : "PENDING",
+            type: orderTypeRecommendation.orderType,
+            confidence: Math.min(1.0, Math.max(0.0, params.analysis.confidence || 0.7)),
+            reason: `${orderTypeRecommendation.reasoning} - ${params.analysis.reasoning || "Professional order management decision"}`,
+            brokerTradeId: orderResult.dealId || orderResult.dealReference || `local-${Date.now()}`,
           },
         });
 
         return {
           success: true,
-          orderDetails: {
+          data: {
             tradeRecord,
             epic,
             size: cleanSize,
@@ -780,17 +842,17 @@ export class EnhancedBotEvaluationService {
       } else {
         // 🚨 CRITICAL FIX: Handle trade rejection properly
         const rejectReason =
-          tradeResult?.rejectReason || tradeResult?.errorMessage || "Trade was rejected by broker";
+          orderResult?.rejectReason || orderResult?.errorMessage || "Trade was rejected by broker";
 
         // Cancel pending order on trade failure
         await this.professionalOrderManager.cancelOrderDecision(
-          bot.id,
-          bot.tradingPairSymbol,
+          params.bot.id,
+          params.bot.tradingPairSymbol,
           `Trade execution failed: ${rejectReason}`,
         );
 
         logger.error(`❌ Professional Trade Execution Failed: ${rejectReason}`);
-        logger.error(`🔍 Full rejection details:`, tradeResult);
+        logger.error(`🔍 Full rejection details:`, orderResult);
 
         return {
           success: false,
@@ -801,8 +863,8 @@ export class EnhancedBotEvaluationService {
       // Cancel pending order on error
       try {
         await this.professionalOrderManager.cancelOrderDecision(
-          bot.id,
-          bot.tradingPairSymbol,
+          params.bot.id,
+          params.bot.tradingPairSymbol,
           `Trade execution error: ${error instanceof Error ? error.message : "Unknown error"}`,
         );
       } catch (cleanupError) {
@@ -982,10 +1044,14 @@ export class EnhancedBotEvaluationService {
         // Professional reasoning
         reasoning: committeeDecision.reasoning,
 
-        // Risk management
-        stopLoss: this.calculateProfessionalStopLoss(marketPrice.price, committeeDecision),
-        takeProfit: this.calculateProfessionalTakeProfit(marketPrice.price, committeeDecision),
-        positionSize: committeeDecision.coordinatorDecision.positionSize || 0.001,
+        // Risk management - Using Advanced Risk Management Agent
+        ...(await this.calculateAdvancedRiskManagement(
+          bot,
+          marketPrice.price,
+          committeeDecision,
+          candleData,
+          portfolioContext,
+        )),
 
         // Market context
         marketPrice: marketPrice.price,
@@ -1117,6 +1183,273 @@ export class EnhancedBotEvaluationService {
   }
 
   /**
+   * 🎯 NEW: Advanced Risk Management using sophisticated Risk Management Agent
+   */
+  private async calculateAdvancedRiskManagement(
+    bot: any,
+    currentPrice: number,
+    committeeDecision: any,
+    candleData: CandleData[],
+    portfolioContext: any,
+  ): Promise<{
+    stopLoss: number;
+    takeProfit: number;
+    positionSize: number;
+    riskRewardRatio: number;
+    riskManagementReasoning: string;
+    riskConfidence: number;
+    riskWarnings: string[];
+  }> {
+    try {
+      if (!committeeDecision.shouldTrade) {
+        return {
+          stopLoss: 0,
+          takeProfit: 0,
+          positionSize: 0,
+          riskRewardRatio: 0,
+          riskManagementReasoning: "No trade recommended by committee",
+          riskConfidence: 0,
+          riskWarnings: [],
+        };
+      }
+
+      // Calculate ATR from recent candle data
+      const atr = this.calculateATR(candleData);
+
+      // Extract support/resistance levels from technical analysis
+      const supportResistanceLevels = this.extractSupportResistanceLevels(
+        committeeDecision.technicalAnalysis,
+        candleData,
+        currentPrice,
+      );
+
+      // Calculate recent volatility
+      const recentVolatility = this.calculateRecentVolatility(candleData);
+
+      // Determine market structure
+      const marketStructure = this.determineMarketStructure(
+        committeeDecision.technicalAnalysis,
+        candleData,
+      );
+
+      // Prepare input for Risk Management Agent
+      const riskInput = {
+        symbol: bot.tradingPairSymbol,
+        timeframe: bot.timeframe || "1m",
+        entryPrice: currentPrice,
+        direction: committeeDecision.decision === "BUY" ? "BUY" : ("SELL" as "BUY" | "SELL"),
+        accountBalance: portfolioContext.accountBalance || 10000,
+        riskPercentage: 2, // 2% risk per trade
+        candleData: candleData,
+        atr: atr,
+        supportResistanceLevels: supportResistanceLevels,
+        recentVolatility: recentVolatility,
+        marketStructure: marketStructure,
+      };
+
+      logger.info(
+        `🎯 Calling Advanced Risk Management Agent for ${bot.tradingPairSymbol} ${bot.timeframe}`,
+      );
+
+      // Call the Advanced Risk Management Agent
+      const riskResult = await advancedRiskManagementAgent.calculateOptimalRiskLevels(riskInput);
+
+      logger.info(`✅ Advanced Risk Management Result:`);
+      logger.info(`   SL: ${riskResult.stopLoss} | TP: ${riskResult.takeProfit}`);
+      logger.info(`   RR: ${riskResult.riskRewardRatio}:1 | Confidence: ${riskResult.confidence}`);
+      logger.info(`   Reasoning: ${riskResult.reasoning}`);
+
+      if (riskResult.warnings.length > 0) {
+        logger.warn(`   Warnings: ${riskResult.warnings.join(", ")}`);
+      }
+
+      return {
+        stopLoss: riskResult.stopLoss,
+        takeProfit: riskResult.takeProfit,
+        positionSize: riskResult.positionSize,
+        riskRewardRatio: riskResult.riskRewardRatio,
+        riskManagementReasoning: riskResult.reasoning,
+        riskConfidence: riskResult.confidence,
+        riskWarnings: riskResult.warnings,
+      };
+    } catch (error) {
+      logger.error(`❌ Advanced Risk Management failed:`, error);
+
+      // Fallback to conservative values
+      const fallbackSL =
+        committeeDecision.decision === "BUY"
+          ? currentPrice * 0.99 // 1% stop loss
+          : currentPrice * 1.01;
+
+      const fallbackTP =
+        committeeDecision.decision === "BUY"
+          ? currentPrice * 1.015 // 1.5% take profit
+          : currentPrice * 0.985;
+
+      return {
+        stopLoss: fallbackSL,
+        takeProfit: fallbackTP,
+        positionSize: 0.001,
+        riskRewardRatio: 1.5,
+        riskManagementReasoning: "Fallback risk management due to agent failure",
+        riskConfidence: 0.3,
+        riskWarnings: ["Advanced risk management failed - using conservative fallback"],
+      };
+    }
+  }
+
+  /**
+   * Calculate ATR (Average True Range) from candle data
+   */
+  private calculateATR(candleData: CandleData[], period: number = 14): number {
+    if (candleData.length < period + 1) return 0.001; // Fallback for insufficient data
+
+    const trueRanges = [];
+
+    for (let i = 1; i < candleData.length; i++) {
+      const current = candleData[i];
+      const previous = candleData[i - 1];
+
+      const highLow = current.high - current.low;
+      const highClosePrev = Math.abs(current.high - previous.close);
+      const lowClosePrev = Math.abs(current.low - previous.close);
+
+      const trueRange = Math.max(highLow, highClosePrev, lowClosePrev);
+      trueRanges.push(trueRange);
+    }
+
+    // Calculate simple moving average of true ranges
+    const recentTR = trueRanges.slice(-period);
+    const atr = recentTR.reduce((sum, tr) => sum + tr, 0) / recentTR.length;
+
+    return atr;
+  }
+
+  /**
+   * Extract support and resistance levels from technical analysis and price data
+   */
+  private extractSupportResistanceLevels(
+    technicalAnalysis: any,
+    candleData: CandleData[],
+    currentPrice: number,
+  ): { support: number[]; resistance: number[] } {
+    const support: number[] = [];
+    const resistance: number[] = [];
+
+    try {
+      // Extract from technical analysis if available
+      if (technicalAnalysis.keyLevels) {
+        support.push(...(technicalAnalysis.keyLevels.support || []));
+        resistance.push(...(technicalAnalysis.keyLevels.resistance || []));
+      }
+
+      // Calculate pivot points from recent price action
+      const recentHighs = candleData
+        .slice(-20)
+        .map((c) => c.high)
+        .sort((a, b) => b - a);
+      const recentLows = candleData
+        .slice(-20)
+        .map((c) => c.low)
+        .sort((a, b) => a - b);
+
+      // Add significant highs as resistance
+      resistance.push(...recentHighs.slice(0, 3).filter((h) => h > currentPrice));
+
+      // Add significant lows as support
+      support.push(...recentLows.slice(0, 3).filter((l) => l < currentPrice));
+
+      // Remove duplicates and sort
+      const uniqueSupport = [...new Set(support)].sort((a, b) => b - a);
+      const uniqueResistance = [...new Set(resistance)].sort((a, b) => a - b);
+
+      return {
+        support: uniqueSupport.slice(0, 5), // Top 5 support levels
+        resistance: uniqueResistance.slice(0, 5), // Top 5 resistance levels
+      };
+    } catch (error) {
+      logger.error("❌ Failed to extract support/resistance levels:", error);
+      return {
+        support: [currentPrice * 0.99, currentPrice * 0.98],
+        resistance: [currentPrice * 1.01, currentPrice * 1.02],
+      };
+    }
+  }
+
+  /**
+   * Calculate recent volatility from price data
+   */
+  private calculateRecentVolatility(candleData: CandleData[], period: number = 10): number {
+    if (candleData.length < period) return 1.0; // Default volatility
+
+    const returns = [];
+
+    for (let i = 1; i < Math.min(candleData.length, period + 1); i++) {
+      const currentClose = candleData[i].close;
+      const previousClose = candleData[i - 1].close;
+      const return_ = (currentClose - previousClose) / previousClose;
+      returns.push(return_);
+    }
+
+    // Calculate standard deviation of returns
+    const mean = returns.reduce((sum, r) => sum + r, 0) / returns.length;
+    const variance = returns.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / returns.length;
+    const volatility = Math.sqrt(variance) * 100; // Convert to percentage
+
+    return Math.max(0.5, Math.min(5.0, volatility)); // Clamp between 0.5% and 5%
+  }
+
+  /**
+   * Determine market structure from technical analysis and price action
+   */
+  private determineMarketStructure(
+    technicalAnalysis: any,
+    candleData: CandleData[],
+  ): "TRENDING" | "RANGING" | "BREAKOUT" {
+    try {
+      // Check if technical analysis provides market structure info
+      if (technicalAnalysis.marketStructure) {
+        return technicalAnalysis.marketStructure;
+      }
+
+      // Analyze price action to determine structure
+      if (candleData.length < 20) return "RANGING";
+
+      const recent20 = candleData.slice(-20);
+      const highs = recent20.map((c) => c.high);
+      const lows = recent20.map((c) => c.low);
+
+      const highestHigh = Math.max(...highs);
+      const lowestLow = Math.min(...lows);
+      const range = highestHigh - lowestLow;
+      const currentPrice = recent20[recent20.length - 1].close;
+
+      // Simple trend detection
+      const firstHalf = recent20.slice(0, 10);
+      const secondHalf = recent20.slice(10);
+
+      const firstAvg = firstHalf.reduce((sum, c) => sum + c.close, 0) / firstHalf.length;
+      const secondAvg = secondHalf.reduce((sum, c) => sum + c.close, 0) / secondHalf.length;
+
+      const priceChange = (secondAvg - firstAvg) / firstAvg;
+
+      // If price is near highs/lows and showing strong directional movement
+      if (Math.abs(priceChange) > 0.02) {
+        // 2% movement
+        if (currentPrice > highestHigh * 0.98 || currentPrice < lowestLow * 1.02) {
+          return "BREAKOUT";
+        }
+        return "TRENDING";
+      }
+
+      return "RANGING";
+    } catch (error) {
+      logger.error("❌ Failed to determine market structure:", error);
+      return "RANGING";
+    }
+  }
+
+  /**
    * 🔥 NEW: Get bot-specific trade history and timing context
    */
   private async getBotTradeHistory(botId: string): Promise<any> {
@@ -1220,11 +1553,6 @@ export class EnhancedBotEvaluationService {
   private async getRealMarketPrice(symbol: string, botId: string): Promise<any> {
     try {
       const normalizedSymbol = symbol.replace(/[^A-Z]/g, "");
-      const epic = this.convertSymbolToEpic(normalizedSymbol);
-
-      logger.info(
-        `🔍 Getting real market price for ${symbol} (normalized: ${normalizedSymbol}, epic: ${epic})`,
-      );
 
       const capitalApiKey = Array.from(this.capitalApiInstances.keys()).find((key) =>
         key.includes(botId),
@@ -1240,7 +1568,44 @@ export class EnhancedBotEvaluationService {
       }
 
       logger.info(`✅ Found Capital.com API instance for price fetching`);
-      const priceData = await capitalApi.getLatestPrice(epic);
+
+      // 🧠 Use Enhanced Epic Resolver with AI assistance
+      let epic: string;
+      try {
+        const { enhancedEpicResolverService } = await import("./enhanced-epic-resolver.service");
+        epic =
+          (await enhancedEpicResolverService.resolveEpic(symbol, capitalApi)) ||
+          this.convertSymbolToTradingEpic(normalizedSymbol);
+      } catch (resolverError) {
+        logger.warn(`⚠️ Epic resolver failed, using fallback: ${resolverError}`);
+        epic = this.convertSymbolToTradingEpic(normalizedSymbol);
+      }
+
+      logger.info(
+        `🔍 Getting real market price for ${symbol} (normalized: ${normalizedSymbol}, epic: ${epic})`,
+      );
+
+      // Try multiple authentication strategies
+      const authStrategies = [
+        () => capitalApi.getLatestPrice(epic),
+        () => this.tryAlternativeAuthentication(capitalApi, epic),
+        () => this.tryReAuthentication(capitalApi, epic),
+      ];
+
+      let priceData = null;
+      let lastError = null;
+
+      for (const strategy of authStrategies) {
+        try {
+          priceData = await strategy();
+          if (priceData && priceData.bid && (priceData.ask || priceData.ofr)) {
+            break; // Success!
+          }
+        } catch (strategyError) {
+          lastError = strategyError;
+          logger.warn(`⚠️ Price fetch strategy failed: ${strategyError}`);
+        }
+      }
 
       if (priceData && priceData.bid && (priceData.ask || priceData.ofr)) {
         const offer = priceData.ask || priceData.ofr;
@@ -1248,20 +1613,84 @@ export class EnhancedBotEvaluationService {
         logger.info(
           `✅ Real market price fetched: ${symbol} = $${midPrice.toFixed(2)} (bid: ${priceData.bid}, ask: ${offer})`,
         );
-        return { symbol, price: midPrice, bid: priceData.bid, offer: offer };
+        return {
+          symbol,
+          price: midPrice,
+          bid: priceData.bid,
+          offer: offer,
+          spread: offer - priceData.bid,
+        };
       } else {
-        logger.error(`❌ Invalid price data received:`, priceData);
-        throw new Error("Invalid price data from Capital.com API");
+        throw lastError || new Error("All authentication strategies failed");
       }
     } catch (error) {
       logger.error(`❌ Real market price fetch failed for ${symbol}:`, error);
 
-      // Only use fallback as last resort
+      // Smart fallback pricing based on market data
       const normalizedSymbol = symbol.replace(/[^A-Z]/g, "");
-      const fallbackPrice = normalizedSymbol === "BTCUSD" ? 99000 : 1;
-      logger.warn(`⚠️ Using fallback price for ${symbol}: $${fallbackPrice}`);
-      return { symbol, price: fallbackPrice };
+      const fallbackPrice = await this.getSmartFallbackPrice(symbol, normalizedSymbol);
+      logger.warn(`⚠️ Using smart fallback price for ${symbol}: $${fallbackPrice}`);
+      return { symbol, price: fallbackPrice, isFallback: true };
     }
+  }
+
+  /**
+   * 🔄 Try Alternative Authentication Strategy
+   */
+  private async tryAlternativeAuthentication(capitalApi: any, epic: string): Promise<any> {
+    try {
+      // Force re-authentication
+      await capitalApi.authenticate();
+      return await capitalApi.getLatestPrice(epic);
+    } catch (error) {
+      throw new Error(`Alternative authentication failed: ${error}`);
+    }
+  }
+
+  /**
+   * 🔐 Try Re-Authentication Strategy
+   */
+  private async tryReAuthentication(capitalApi: any, epic: string): Promise<any> {
+    try {
+      // Clear session and re-authenticate
+      if (capitalApi.session) {
+        capitalApi.session = null;
+      }
+      await capitalApi.authenticate();
+
+      // Wait a moment for authentication to settle
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      return await capitalApi.getLatestPrice(epic);
+    } catch (error) {
+      throw new Error(`Re-authentication failed: ${error}`);
+    }
+  }
+
+  /**
+   * 🧠 Smart Fallback Pricing
+   */
+  private async getSmartFallbackPrice(symbol: string, normalizedSymbol: string): Promise<number> {
+    // Use reasonable fallback prices based on current market conditions
+    const fallbackPrices: { [key: string]: number } = {
+      BTCUSD: 100000,
+      ETHUSD: 4000,
+      ADAUSD: 0.5,
+      XRPUSD: 0.6,
+      LTCUSD: 100,
+      DOTUSD: 8,
+      LINKUSD: 20,
+      BCHUSD: 400,
+      XLMUSD: 0.12,
+      TRXUSD: 0.08,
+      BNBUSD: 600,
+      ATOMUSD: 10,
+      SOLUSD: 200,
+    };
+
+    const price = fallbackPrices[normalizedSymbol] || 1;
+    logger.info(`💰 Using fallback price for ${symbol}: $${price}`);
+    return price;
   }
 
   /**
@@ -1302,6 +1731,9 @@ export class EnhancedBotEvaluationService {
    * Convert symbol to Capital.com epic for price fetching
    */
   private convertSymbolToEpic(symbol: string): string {
+    // First normalize the symbol by removing special characters
+    const normalizedSymbol = symbol.replace(/[\/\-_]/g, "").toUpperCase();
+
     const symbolMap: { [key: string]: string } = {
       BTCUSD: "BTCUSD",
       ETHUSD: "ETHUSD",
@@ -1334,15 +1766,62 @@ export class EnhancedBotEvaluationService {
       UNIUSD: "UNIUSD",
       AAVEUSD: "AAVEUSD",
       SNXUSD: "SNXUSD",
+
+      // Support common alternative formats
+      "BTC/USD": "BTCUSD",
+      "ETH/USD": "ETHUSD",
+      "ADA/USD": "ADAUSD",
+      "DOT/USD": "DOTUSD",
+      "LINK/USD": "LINKUSD",
+      "XRP/USD": "XRPUSD",
+      "LTC/USD": "LTCUSD",
+      "BCH/USD": "BCHUSD",
+      "XLM/USD": "XLMUSD",
+      "EOS/USDT": "EOSUSDT",
+      "TRX/USD": "TRXUSD",
+      "BNB/USD": "BNBUSD",
+      "ATOM/USD": "ATOMUSD",
+      "VET/USD": "VETUSD",
+      "FIL/USD": "FILUSD",
+      "THETA/USD": "THETAUSD",
+      "XTZ/USD": "XTZUSD",
+      "ALGO/USD": "ALGOUSD",
+      "ZEC/USD": "ZECUSD",
+      "OMG/USD": "OMGUSD",
+      "MKR/USD": "MKRUSD",
+      "DASH/USD": "DASHUSD",
+      "COMP/USD": "COMPUSD",
+      "BAT/USD": "BATUSD",
+      "ZRX/USD": "ZRXUSD",
+      "SUSHI/USD": "SUSHIUSD",
+      "YFI/USD": "YFIUSD",
+      "CRV/USD": "CRVUSD",
+      "UNI/USD": "UNIUSD",
+      "AAVE/USD": "AAVEUSD",
+      "SNX/USD": "SNXUSD",
     };
 
-    return symbolMap[symbol] || symbol;
+    // Try exact match first
+    if (symbolMap[symbol]) {
+      return symbolMap[symbol];
+    }
+
+    // Try normalized symbol
+    if (symbolMap[normalizedSymbol]) {
+      return symbolMap[normalizedSymbol];
+    }
+
+    // Return normalized symbol as fallback
+    return normalizedSymbol;
   }
 
   /**
    * Convert symbol to Capital.com trading epic
    */
   private convertSymbolToTradingEpic(symbol: string): string {
+    // First normalize the symbol by removing special characters
+    const normalizedSymbol = symbol.replace(/[\/\-_]/g, "").toUpperCase();
+
     // Use the same epic for both data and trading - BTCUSD works!
     const tradingMap: { [key: string]: string } = {
       BTCUSD: "BTCUSD", // Use BTCUSD for both data and trading
@@ -1357,9 +1836,34 @@ export class EnhancedBotEvaluationService {
       EOSUSDT: "EOSUSDT",
       TRXUSD: "TRXUSD",
       BNBUSD: "BNBUSD",
+
+      // Support common alternative formats
+      "BTC/USD": "BTCUSD",
+      "ETH/USD": "ETHUSD",
+      "ADA/USD": "ADAUSD",
+      "DOT/USD": "DOTUSD",
+      "LINK/USD": "LINKUSD",
+      "XRP/USD": "XRPUSD",
+      "LTC/USD": "LTCUSD",
+      "BCH/USD": "BCHUSD",
+      "XLM/USD": "XLMUSD",
+      "EOS/USDT": "EOSUSDT",
+      "TRX/USD": "TRXUSD",
+      "BNB/USD": "BNBUSD",
     };
 
-    return tradingMap[symbol] || symbol;
+    // Try exact match first
+    if (tradingMap[symbol]) {
+      return tradingMap[symbol];
+    }
+
+    // Try normalized symbol
+    if (tradingMap[normalizedSymbol]) {
+      return tradingMap[normalizedSymbol];
+    }
+
+    // Return normalized symbol as fallback
+    return normalizedSymbol;
   }
 
   /**
@@ -1475,104 +1979,6 @@ export class EnhancedBotEvaluationService {
     const rsi = 100 - 100 / (1 + rs);
 
     return rsi;
-  }
-
-  /**
-   * Execute trade with professional risk management from committee decision
-   */
-  private async executeTradeWithProfessionalRisk(params: {
-    analysis: any;
-    bot: any;
-    marketPrice: any;
-    portfolioContext: any;
-    positionCheck: any;
-  }): Promise<{ success: boolean; data?: any; error?: string }> {
-    try {
-      logger.info(`🚀 Executing professional trade with committee decision...`);
-
-      // 🚨 CRITICAL FIX: Use same key generation as setupCapitalApi
-      const brokerCredential = params.bot.user?.brokerCredentials?.[0];
-
-      if (!brokerCredential || !brokerCredential.credentials) {
-        return {
-          success: false,
-          error: "No broker credentials configured for trade execution",
-        };
-      }
-
-      const credentials = credentialsEncryption.decryptCredentials(brokerCredential.credentials);
-      const cacheKey = `${params.bot.id}-${credentials.apiKey.slice(-8)}`;
-
-      // Get Capital.com API instance using correct key
-      const capitalApi = this.capitalApiInstances.get(cacheKey);
-
-      if (!capitalApi) {
-        return {
-          success: false,
-          error: "Capital.com API not available for trade execution",
-        };
-      }
-
-      // Create evaluation record
-      const evaluation = await this.createEvaluationRecord(
-        params.bot.id,
-        params.bot.userId || params.bot.user?.id || "unknown",
-        "chart://professional-committee",
-        params.analysis,
-        params.portfolioContext,
-        {
-          approved: true,
-          positionSize: params.analysis.positionSize,
-          reasoning: params.analysis.reasoning.join("; "),
-          strategyCompliance: { isCompliant: true },
-        },
-        params.bot.tradingPairSymbol,
-        params.bot.timeframe,
-      );
-
-      // Execute the professional trade
-      const tradeResult = await this.executeProfessionalTrade(
-        params.bot,
-        capitalApi,
-        {
-          approved: true,
-          positionSize: params.analysis.positionSize,
-          direction: params.analysis.direction,
-          stopLoss: params.analysis.stopLoss,
-          takeProfit: params.analysis.takeProfit,
-          reasoning: params.analysis.reasoning.join("; "),
-          strategyCompliance: { isCompliant: true },
-        },
-        params.analysis,
-        evaluation.id,
-      );
-
-      if (tradeResult.success) {
-        return {
-          success: true,
-          data: {
-            tradeId: tradeResult.orderDetails?.tradeId,
-            positionSize: params.analysis.positionSize,
-            direction: params.analysis.direction,
-            stopLoss: params.analysis.stopLoss,
-            takeProfit: params.analysis.takeProfit,
-            evaluationId: evaluation.id,
-            committeeDecision: params.analysis.coordinatorDecision,
-          },
-        };
-      } else {
-        return {
-          success: false,
-          error: tradeResult.error || "Trade execution failed",
-        };
-      }
-    } catch (error) {
-      logger.error(`❌ Professional trade execution failed:`, error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown execution error",
-      };
-    }
   }
 
   /**

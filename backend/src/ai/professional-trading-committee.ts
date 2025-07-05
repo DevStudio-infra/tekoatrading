@@ -1320,9 +1320,136 @@ Think like you're making a decision that will be reviewed by the investment comm
   }
 
   private extractExecutionPlan(analysis: string): string {
-    if (analysis.toLowerCase().includes("market order")) return "MARKET";
-    if (analysis.toLowerCase().includes("limit order")) return "LIMIT";
+    // Smart order type selection based on market conditions and analysis
+    const lowerAnalysis = analysis.toLowerCase();
+
+    // Check for explicit order type mentions
+    if (lowerAnalysis.includes("limit order") || lowerAnalysis.includes("limit entry")) {
+      return "LIMIT";
+    }
+
+    if (lowerAnalysis.includes("stop order") || lowerAnalysis.includes("stop entry")) {
+      return "STOP";
+    }
+
+    if (lowerAnalysis.includes("market order") || lowerAnalysis.includes("immediate execution")) {
+      return "MARKET";
+    }
+
+    // Analyze market conditions for intelligent selection
+    if (lowerAnalysis.includes("high volatility") || lowerAnalysis.includes("volatile")) {
+      if (lowerAnalysis.includes("strong signal") || lowerAnalysis.includes("high confidence")) {
+        return "MARKET"; // Execute immediately in volatile markets with strong signals
+      } else {
+        return "STOP"; // Wait for confirmation in volatile markets
+      }
+    }
+
+    if (lowerAnalysis.includes("low volatility") || lowerAnalysis.includes("stable")) {
+      return "LIMIT"; // Optimize entry in stable markets
+    }
+
+    if (lowerAnalysis.includes("breakout") || lowerAnalysis.includes("trend continuation")) {
+      return "STOP"; // Wait for trend confirmation
+    }
+
+    if (
+      lowerAnalysis.includes("range") ||
+      lowerAnalysis.includes("support") ||
+      lowerAnalysis.includes("resistance")
+    ) {
+      return "LIMIT"; // Better entry at key levels
+    }
+
+    if (lowerAnalysis.includes("urgent") || lowerAnalysis.includes("immediate")) {
+      return "MARKET"; // Execute immediately when urgent
+    }
+
+    if (
+      lowerAnalysis.includes("scalping") ||
+      lowerAnalysis.includes("m1") ||
+      lowerAnalysis.includes("m5")
+    ) {
+      return "MARKET"; // Fast execution for scalping
+    }
+
+    // Default to MARKET for moderate confidence scenarios
     return "MARKET";
+  }
+
+  private extractOrderTypeConfidence(analysis: string): number {
+    const lowerAnalysis = analysis.toLowerCase();
+
+    // High confidence indicators
+    if (
+      lowerAnalysis.includes("strong signal") ||
+      lowerAnalysis.includes("clear breakout") ||
+      lowerAnalysis.includes("urgent")
+    ) {
+      return 90;
+    }
+
+    // Medium confidence indicators
+    if (
+      lowerAnalysis.includes("moderate signal") ||
+      lowerAnalysis.includes("trend continuation") ||
+      lowerAnalysis.includes("support/resistance")
+    ) {
+      return 70;
+    }
+
+    // Low confidence indicators
+    if (
+      lowerAnalysis.includes("weak signal") ||
+      lowerAnalysis.includes("uncertain") ||
+      lowerAnalysis.includes("mixed signals")
+    ) {
+      return 50;
+    }
+
+    return 75; // Default confidence
+  }
+
+  private extractOrderTypeReasoning(analysis: string, orderType: string): string {
+    const lowerAnalysis = analysis.toLowerCase();
+
+    switch (orderType) {
+      case "MARKET":
+        if (lowerAnalysis.includes("urgent") || lowerAnalysis.includes("immediate")) {
+          return "Market order for immediate execution due to urgent signal";
+        }
+        if (lowerAnalysis.includes("high volatility") && lowerAnalysis.includes("strong signal")) {
+          return "Market order to capture strong signal in volatile conditions";
+        }
+        if (lowerAnalysis.includes("scalping")) {
+          return "Market order for fast scalping execution";
+        }
+        return "Market order for reliable execution";
+
+      case "LIMIT":
+        if (lowerAnalysis.includes("low volatility")) {
+          return "Limit order to optimize entry in stable market conditions";
+        }
+        if (lowerAnalysis.includes("support") || lowerAnalysis.includes("resistance")) {
+          return "Limit order to enter at key support/resistance levels";
+        }
+        return "Limit order for better entry price";
+
+      case "STOP":
+        if (lowerAnalysis.includes("breakout")) {
+          return "Stop order to wait for breakout confirmation";
+        }
+        if (lowerAnalysis.includes("trend continuation")) {
+          return "Stop order to confirm trend continuation";
+        }
+        if (lowerAnalysis.includes("high volatility")) {
+          return "Stop order to wait for volatility confirmation";
+        }
+        return "Stop order for trend confirmation";
+
+      default:
+        return "Standard execution plan";
+    }
   }
 
   private extractConsensus(analysis: string): string {

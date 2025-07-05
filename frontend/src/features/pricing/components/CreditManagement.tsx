@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/features/shared/components/ui/card";
 import { Button } from "@/features/shared/components/ui/button";
 import { Badge } from "@/features/shared/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
+import { Progress } from "@/features/shared/components/ui/progress";
 import { Slider } from "@/features/shared/components/ui/slider";
 import {
   Zap,

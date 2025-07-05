@@ -31,10 +31,10 @@ export function HomeHero() {
           ) : (
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button asChild size="lg">
-                <Link href={`/${locale}/sign-up`}>{t("getStarted")}</Link>
+                <Link href={`/${locale}/sign-up` as any}>{t("getStarted")}</Link>
               </Button>
               <Button asChild variant="outline" size="lg">
-                <Link href={`/${locale}/sign-in`}>Sign In</Link>
+                <Link href={`/${locale}/sign-in` as any}>Sign In</Link>
               </Button>
             </div>
           )}

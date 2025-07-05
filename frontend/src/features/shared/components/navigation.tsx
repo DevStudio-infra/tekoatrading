@@ -65,22 +65,36 @@ export function Navigation() {
 
           {/* Navigation Links */}
           <div className="hidden md:flex items-center space-x-6">
-            {!isSignedIn && (
-              <>
-                <Link
-                  href={`/${locale}`}
-                  className="text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  {t("home")}
-                </Link>
-                <Link
-                  href={`/${locale}/features`}
-                  className="text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  {t("features")}
-                </Link>
-              </>
-            )}
+            <Link
+              href={`/${locale}`}
+              className="text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {t("home")}
+            </Link>
+            <Link
+              href={`/${locale}/features` as any}
+              className="text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {t("features")}
+            </Link>
+            <Link
+              href={`/${locale}/pricing` as any}
+              className="text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {t("pricing")}
+            </Link>
+            <Link
+              href={`/${locale}/contact` as any}
+              className="text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {t("contact")}
+            </Link>
+            <Link
+              href={`/${locale}/faq` as any}
+              className="text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {t("faq")}
+            </Link>
           </div>
 
           {/* Right side */}
@@ -147,12 +161,12 @@ export function Navigation() {
               </div>
             ) : (
               <div className="flex items-center space-x-2">
-                <Link href={`/${locale}/sign-in`}>
+                <Link href={`/${locale}/sign-in` as any}>
                   <Button variant="ghost" size="sm">
                     {t("signIn")}
                   </Button>
                 </Link>
-                <Link href={`/${locale}/sign-up`}>
+                <Link href={`/${locale}/sign-up` as any}>
                   <Button variant="default" size="sm">
                     {t("signUp")}
                   </Button>

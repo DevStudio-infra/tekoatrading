@@ -141,7 +141,7 @@ export function RecentTrades() {
           {trades && trades.length > 0 && (
             <div className="pt-4 border-t">
               <Button variant="outline" className="w-full" asChild>
-                <Link href={`/${locale}/trades`}>
+                <Link href={`/${locale}/trades` as any}>
                   <Activity className="h-4 w-4 mr-2" />
                   View All Trades
                 </Link>

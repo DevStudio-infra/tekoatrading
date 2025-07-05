@@ -134,7 +134,14 @@ const PricingPage = () => {
 
   const calculateCreditPrice = (credits: number) => {
     if (!pricingData) return "0.00";
-    return (credits * pricingData.creditPricing.pricePerCredit).toFixed(2);
+    // Use pricing based on subscription type
+    const pricePerCredit = userSubscription === "PRO" ? 0.01 : 0.05;
+    return (credits * pricePerCredit).toFixed(2);
+  };
+
+  const calculateTotalPrice = (basePrice: number, credits: number) => {
+    const creditPrice = parseFloat(calculateCreditPrice(credits));
+    return (basePrice + creditPrice).toFixed(2);
   };
 
   if (loading) {
@@ -265,6 +272,96 @@ const PricingPage = () => {
         ))}
       </div>
 
+      {/* Pricing Breakdown Section */}
+      <div className="max-w-4xl mx-auto mb-16">
+        <div className="text-center mb-8">
+          <h2 className="text-3xl font-bold text-gray-900 mb-4">Complete Pricing Breakdown</h2>
+          <p className="text-gray-600 mb-6">
+            See exactly what you're paying for with our transparent pricing
+          </p>
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-8">
+          {/* Monthly vs Yearly Comparison */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-center">Pro Plan Comparison</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="flex justify-between items-center p-4 bg-gray-50 rounded-lg">
+                  <div>
+                    <p className="font-semibold">Monthly Plan</p>
+                    <p className="text-sm text-gray-600">$19.99/month</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-2xl font-bold text-gray-900">$19.99</p>
+                    <p className="text-sm text-gray-600">per month</p>
+                  </div>
+                </div>
+
+                <div className="flex justify-between items-center p-4 bg-green-50 rounded-lg border-2 border-green-200">
+                  <div>
+                    <p className="font-semibold text-green-800">Yearly Plan</p>
+                    <p className="text-sm text-green-600">$203.89/year</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-2xl font-bold text-green-800">$16.99</p>
+                    <p className="text-sm text-green-600">per month</p>
+                  </div>
+                </div>
+
+                <div className="text-center p-4 bg-blue-50 rounded-lg">
+                  <p className="text-lg font-semibold text-blue-800">
+                    Save $36.00 per year with yearly billing!
+                  </p>
+                  <p className="text-sm text-blue-600 mt-1">That&apos;s 15% off the monthly rate</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Credit Pricing by Plan */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-center">Credit Pricing</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="flex justify-between items-center p-4 bg-gray-50 rounded-lg">
+                  <div>
+                    <p className="font-semibold">Free Plan</p>
+                    <p className="text-sm text-gray-600">20 credits/month included</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-2xl font-bold text-gray-900">$0.05</p>
+                    <p className="text-sm text-gray-600">per additional credit</p>
+                  </div>
+                </div>
+
+                <div className="flex justify-between items-center p-4 bg-blue-50 rounded-lg">
+                  <div>
+                    <p className="font-semibold text-blue-800">Pro Plan</p>
+                    <p className="text-sm text-blue-600">2,000 credits/month included</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-2xl font-bold text-blue-800">$0.01</p>
+                    <p className="text-sm text-blue-600">per additional credit</p>
+                  </div>
+                </div>
+
+                <div className="text-center p-4 bg-green-50 rounded-lg">
+                  <p className="text-lg font-semibold text-green-800">
+                    5x cheaper credits with Pro!
+                  </p>
+                  <p className="text-sm text-green-600 mt-1">Save 80% on additional credits</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
       {/* Credit Purchase Section */}
       <div className="text-center mb-8">
         <h2 className="text-3xl font-bold text-gray-900 mb-4">Need More Credits?</h2>
@@ -297,6 +394,85 @@ const PricingPage = () => {
             </button>
           </div>
         </div>
+      </div>
+
+      {/* Subscription + Credits Calculator */}
+      <div className="max-w-4xl mx-auto mb-16">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-center text-2xl">Complete Order Summary</CardTitle>
+            <p className="text-center text-gray-600">
+              See your total monthly and yearly costs with Pro subscription + additional credits
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="grid md:grid-cols-2 gap-8">
+              {/* Monthly Total */}
+              <div className="space-y-6">
+                <h3 className="text-xl font-semibold text-center">Monthly Total</h3>
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium">Pro Subscription</span>
+                    <span className="text-lg font-semibold">$19.99</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium">
+                      Additional Credits ({creditAmount[0]})
+                    </span>
+                    <span className="text-lg font-semibold">
+                      ${calculateCreditPrice(creditAmount[0])}
+                    </span>
+                  </div>
+                  <div className="border-t pt-4">
+                    <div className="flex justify-between items-center">
+                      <span className="text-lg font-semibold">Total Monthly</span>
+                      <span className="text-2xl font-bold text-primary">
+                        ${calculateTotalPrice(19.99, creditAmount[0])}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Yearly Total */}
+              <div className="space-y-6">
+                <h3 className="text-xl font-semibold text-center">Yearly Total</h3>
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium">Pro Subscription (Yearly)</span>
+                    <span className="text-lg font-semibold">$203.89</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium">
+                      Additional Credits ({creditAmount[0] * 12})
+                    </span>
+                    <span className="text-lg font-semibold">
+                      ${calculateCreditPrice(creditAmount[0] * 12)}
+                    </span>
+                  </div>
+                  <div className="border-t pt-4">
+                    <div className="flex justify-between items-center">
+                      <span className="text-lg font-semibold">Total Yearly</span>
+                      <span className="text-2xl font-bold text-primary">
+                        ${calculateTotalPrice(203.89, creditAmount[0] * 12)}
+                      </span>
+                    </div>
+                    <div className="text-center mt-2">
+                      <span className="text-sm text-green-600 font-medium">
+                        Save $
+                        {(
+                          calculateTotalPrice(19.99, creditAmount[0]) * 12 -
+                          calculateTotalPrice(203.89, creditAmount[0] * 12)
+                        ).toFixed(2)}{" "}
+                        per year!
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Credit Slider */}

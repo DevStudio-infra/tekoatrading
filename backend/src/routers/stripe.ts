@@ -260,7 +260,7 @@ router.get("/pricing", async (req, res) => {
           {
             name: "Pro",
             price: 19.99,
-            yearlyPrice: 203.89,
+            yearlyPrice: 203.89, // 19.99 * 12 * 0.85 = 203.89
             billingCycle: "monthly",
             features: [
               "2,000 credits per month",
