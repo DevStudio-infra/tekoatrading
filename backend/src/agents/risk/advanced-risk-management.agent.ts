@@ -61,6 +61,7 @@ export class AdvancedRiskManagementAgent extends BaseAgent {
         data.riskPercentage,
         data.entryPrice,
         optimalScenario.stopLoss,
+        data.symbol,
       );
 
       const result: RiskManagementResult = {
@@ -86,15 +87,69 @@ export class AdvancedRiskManagementAgent extends BaseAgent {
 
   private getTimeframeConstraints(timeframe: string) {
     const constraints = {
-      "1m": { maxSLPips: 10, maxTPPips: 30, maxRR: 3, minRR: 1.2 },
-      "5m": { maxSLPips: 20, maxTPPips: 60, maxRR: 4, minRR: 1.5 },
-      "15m": { maxSLPips: 30, maxTPPips: 90, maxRR: 5, minRR: 1.8 },
-      "1h": { maxSLPips: 50, maxTPPips: 150, maxRR: 6, minRR: 2.0 },
-      "4h": { maxSLPips: 100, maxTPPips: 300, maxRR: 8, minRR: 2.5 },
-      "1d": { maxSLPips: 200, maxTPPips: 600, maxRR: 10, minRR: 3.0 },
+      "1m": { maxSLPips: 50, maxTPPips: 150, maxRR: 3, minRR: 1.2 },
+      "5m": { maxSLPips: 100, maxTPPips: 300, maxRR: 4, minRR: 1.5 },
+      "15m": { maxSLPips: 200, maxTPPips: 600, maxRR: 5, minRR: 1.8 },
+      "1h": { maxSLPips: 500, maxTPPips: 1500, maxRR: 6, minRR: 2.0 },
+      "4h": { maxSLPips: 1000, maxTPPips: 3000, maxRR: 8, minRR: 2.5 },
+      "1d": { maxSLPips: 2000, maxTPPips: 6000, maxRR: 10, minRR: 3.0 },
     };
 
     return constraints[timeframe as keyof typeof constraints] || constraints["1h"];
+  }
+
+  /**
+   * Calculate pip distance based on asset type - Fixed for proper pip calculation
+   */
+  private calculatePipDistance(price1: number, price2: number, symbol: string): number {
+    const priceDiff = Math.abs(price1 - price2);
+
+    // Determine asset type and pip value
+    const normalizedSymbol = symbol.toUpperCase().replace(/[\/\-_]/g, "");
+
+    if (this.isCryptoPair(normalizedSymbol)) {
+      // For crypto pairs like BTCUSD, ETHUSD - pip value depends on price level
+      if (price1 > 10000) {
+        // For high-value cryptos like BTC (>$10k), 1 pip = $1
+        return priceDiff;
+      } else if (price1 > 100) {
+        // For mid-value cryptos like ETH ($100-$10k), 1 pip = $0.1
+        return priceDiff * 10;
+      } else {
+        // For low-value cryptos (<$100), 1 pip = $0.01
+        return priceDiff * 100;
+      }
+    } else if (this.isForexPair(normalizedSymbol)) {
+      // For forex pairs, 1 pip = 0.0001 (except JPY pairs = 0.01)
+      if (normalizedSymbol.includes("JPY")) {
+        return priceDiff * 100; // JPY pairs: 1 pip = 0.01
+      } else {
+        return priceDiff * 10000; // Standard forex: 1 pip = 0.0001
+      }
+    } else if (this.isIndexPair(normalizedSymbol)) {
+      // For indices like US30, SPX500, 1 pip = 1 point
+      return priceDiff;
+    } else {
+      // Default fallback for commodities and other assets
+      return priceDiff * 100;
+    }
+  }
+
+  private isCryptoPair(symbol: string): boolean {
+    const cryptoPatterns = ["BTC", "ETH", "XRP", "LTC", "ADA", "DOT", "LINK", "UNI", "SOL", "AVAX"];
+    return cryptoPatterns.some((pattern) => symbol.includes(pattern));
+  }
+
+  private isForexPair(symbol: string): boolean {
+    const forexPatterns = ["USD", "EUR", "GBP", "JPY", "CHF", "CAD", "AUD", "NZD"];
+    const hasBaseCurrency = forexPatterns.some((currency) => symbol.startsWith(currency));
+    const hasQuoteCurrency = forexPatterns.some((currency) => symbol.endsWith(currency));
+    return hasBaseCurrency && hasQuoteCurrency && symbol.length <= 6;
+  }
+
+  private isIndexPair(symbol: string): boolean {
+    const indexPatterns = ["US30", "SPX500", "NAS100", "GER40", "UK100", "JPN225"];
+    return indexPatterns.some((pattern) => symbol.includes(pattern));
   }
 
   private calculateMultipleScenarios(data: RiskManagementInput, constraints: any) {
@@ -391,8 +446,16 @@ RECOMMENDED_ADJUSTMENTS: [any suggestions]
     }
 
     // Validate pip distances for timeframe
-    const slPips = Math.abs(data.entryPrice - selectedScenario.stopLoss) * 10000;
-    const tpPips = Math.abs(selectedScenario.takeProfit - data.entryPrice) * 10000;
+    const slPips = this.calculatePipDistance(
+      data.entryPrice,
+      selectedScenario.stopLoss,
+      data.symbol,
+    );
+    const tpPips = this.calculatePipDistance(
+      selectedScenario.takeProfit,
+      data.entryPrice,
+      data.symbol,
+    );
 
     if (slPips > constraints.maxSLPips) {
       warnings.push(
@@ -424,9 +487,10 @@ RECOMMENDED_ADJUSTMENTS: [any suggestions]
     riskPercentage: number,
     entryPrice: number,
     stopLoss: number,
+    symbol: string,
   ) {
     const riskAmount = (accountBalance * riskPercentage) / 100;
-    const stopLossDistance = Math.abs(entryPrice - stopLoss);
+    const stopLossDistance = this.calculatePipDistance(entryPrice, stopLoss, symbol);
     const positionSize = riskAmount / stopLossDistance;
 
     return Number(positionSize.toFixed(2));

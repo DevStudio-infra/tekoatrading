@@ -1,5 +1,9 @@
 import { BaseAgent } from "./base-agent";
 import { SophisticatedTradingAgent } from "../agents/trading/sophisticated-trading.agent";
+import {
+  OrderIntelligenceAgent,
+  OrderIntelligenceContext,
+} from "../agents/trading/order-intelligence.agent";
 
 interface EnhancedTradingDecision {
   // Original format compatibility
@@ -26,14 +30,38 @@ interface EnhancedTradingDecision {
   warnings: string[];
   recommendations: string[];
   validated: boolean;
+
+  // Order intelligence (NEW)
+  orderIntelligence?: {
+    orderDecision: "EXECUTE" | "WAIT" | "CANCEL_FIRST" | "MODIFY_EXISTING" | "REJECT";
+    orderManagementActions: {
+      cancelOrders: string[];
+      modifyOrders: { orderId: string; newPrice: number; reason: string }[];
+      priorityLevel: "LOW" | "MEDIUM" | "HIGH";
+    };
+    riskAssessment: {
+      orderRisk: "LOW" | "MEDIUM" | "HIGH";
+      conflictRisk: "LOW" | "MEDIUM" | "HIGH";
+      exposureRisk: "LOW" | "MEDIUM" | "HIGH";
+      overallRisk: "LOW" | "MEDIUM" | "HIGH";
+    };
+    marketTiming: {
+      isOptimalTiming: boolean;
+      betterTimingAvailable: boolean;
+      suggestedDelay: number;
+      timingReason: string;
+    };
+  };
 }
 
 export class EnhancedTradingDecisionAgent extends BaseAgent {
   private sophisticatedAgent: SophisticatedTradingAgent;
+  private orderIntelligenceAgent: OrderIntelligenceAgent;
 
   constructor() {
     super("EnhancedTradingDecisionAgent");
     this.sophisticatedAgent = new SophisticatedTradingAgent();
+    this.orderIntelligenceAgent = new OrderIntelligenceAgent();
   }
 
   async analyze(data: {
@@ -63,6 +91,7 @@ export class EnhancedTradingDecisionAgent extends BaseAgent {
     riskData: any;
     accountBalance?: number;
     openPositions?: any[];
+    capitalApi?: any; // NEW: Capital.com API for order intelligence
     botTradeHistory?: {
       recentTrades: any[];
       lastTrade: any;
@@ -307,6 +336,117 @@ export class EnhancedTradingDecisionAgent extends BaseAgent {
         recommendations: sophisticatedResult.finalRecommendation.reasoning,
         validated: sophisticatedResult.finalRecommendation.shouldTrade,
       };
+
+      // 🎯 NEW: Order Intelligence Analysis
+      console.log(`🎯 Running Order Intelligence Analysis for ${data.symbol}...`);
+
+      if (enhancedDecision.action !== "hold" && data.capitalApi) {
+        try {
+          const orderIntelligenceContext: OrderIntelligenceContext = {
+            symbol: data.symbol,
+            direction: enhancedDecision.action === "buy" ? "BUY" : "SELL",
+            currentPrice: currentPrice,
+            proposedOrderType: enhancedDecision.orderType,
+            proposedPrice: enhancedDecision.limitPrice,
+            proposedStopLoss: enhancedDecision.stopLoss,
+            proposedTakeProfit: enhancedDecision.takeProfit,
+            marketConditions: {
+              volatility:
+                sophisticatedResult.technicalAnalysis.atr > currentPrice * 0.02
+                  ? "HIGH"
+                  : sophisticatedResult.technicalAnalysis.atr > currentPrice * 0.01
+                    ? "MEDIUM"
+                    : "LOW",
+              spread: data.marketData.spread || 0,
+              volume: data.marketData.volume || 1000000,
+              trend:
+                sophisticatedResult.technicalAnalysis.trend === "BULLISH"
+                  ? "BULLISH"
+                  : sophisticatedResult.technicalAnalysis.trend === "BEARISH"
+                    ? "BEARISH"
+                    : "SIDEWAYS",
+            },
+            timeframe: data.timeframe || "1h",
+            accountBalance: data.accountBalance || 10000,
+            botConfig: data.botConfig || { name: "Unknown Bot" },
+            capitalApi: data.capitalApi,
+          };
+
+          const orderIntelligence =
+            await this.orderIntelligenceAgent.analyze(orderIntelligenceContext);
+
+          // Apply order intelligence to final decision
+          enhancedDecision.orderIntelligence = orderIntelligence;
+
+          // Modify decision based on order intelligence
+          if (orderIntelligence.orderDecision === "REJECT") {
+            enhancedDecision.action = "hold";
+            enhancedDecision.validated = false;
+            enhancedDecision.reasoning.unshift("Order intelligence rejected the trade");
+            enhancedDecision.reasoning.push(...orderIntelligence.reasoning);
+            enhancedDecision.warnings.push("Order conflicts detected");
+            console.log(
+              `🚨 Order Intelligence REJECTED trade: ${orderIntelligence.reasoning.join(", ")}`,
+            );
+          } else if (orderIntelligence.orderDecision === "WAIT") {
+            enhancedDecision.action = "hold";
+            enhancedDecision.validated = false;
+            enhancedDecision.reasoning.unshift(
+              `Order intelligence suggests waiting ${orderIntelligence.marketTiming.suggestedDelay} minutes`,
+            );
+            enhancedDecision.reasoning.push(...orderIntelligence.reasoning);
+            enhancedDecision.warnings.push("Better timing available");
+            console.log(
+              `⏰ Order Intelligence suggests WAIT: ${orderIntelligence.marketTiming.timingReason}`,
+            );
+          } else if (orderIntelligence.orderDecision === "CANCEL_FIRST") {
+            enhancedDecision.warnings.push("Cancel conflicting orders first");
+            enhancedDecision.recommendations.push(
+              `Cancel ${orderIntelligence.orderManagementActions.cancelOrders.length} conflicting orders before executing`,
+            );
+            console.log(
+              `🗑️ Order Intelligence suggests canceling ${orderIntelligence.orderManagementActions.cancelOrders.length} orders first`,
+            );
+          } else if (orderIntelligence.orderDecision === "MODIFY_EXISTING") {
+            enhancedDecision.warnings.push("Modify existing orders first");
+            enhancedDecision.recommendations.push(
+              `Modify ${orderIntelligence.orderManagementActions.modifyOrders.length} existing orders before executing`,
+            );
+            console.log(
+              `🔧 Order Intelligence suggests modifying ${orderIntelligence.orderManagementActions.modifyOrders.length} orders first`,
+            );
+          } else if (orderIntelligence.orderDecision === "EXECUTE") {
+            enhancedDecision.reasoning.push("Order intelligence approved the trade");
+            enhancedDecision.recommendations.push(...orderIntelligence.reasoning);
+            console.log(
+              `✅ Order Intelligence APPROVED trade with ${orderIntelligence.confidence}% confidence`,
+            );
+          }
+
+          // Add order management recommendations
+          if (orderIntelligence.orderManagementActions.cancelOrders.length > 0) {
+            enhancedDecision.recommendations.push(
+              `Consider canceling ${orderIntelligence.orderManagementActions.cancelOrders.length} old/conflicting orders`,
+            );
+          }
+          if (orderIntelligence.orderManagementActions.modifyOrders.length > 0) {
+            enhancedDecision.recommendations.push(
+              `Consider modifying ${orderIntelligence.orderManagementActions.modifyOrders.length} orders that are far from market`,
+            );
+          }
+
+          console.log(
+            `🎯 Order Intelligence Analysis Complete: ${orderIntelligence.orderDecision}`,
+          );
+        } catch (error) {
+          console.error(`❌ Order Intelligence Analysis failed:`, error);
+          enhancedDecision.warnings.push("Order intelligence analysis failed");
+        }
+      } else {
+        console.log(
+          `⏭️ Skipping Order Intelligence Analysis (action: ${enhancedDecision.action}, hasCapitalApi: ${!!data.capitalApi})`,
+        );
+      }
 
       // Log professional insights
       this.logProfessionalInsights(enhancedDecision);

@@ -15,6 +15,7 @@ import { BrokerIntegrationService } from "./broker-integration.service";
 import { ChartService } from "../modules/chart/index";
 import { CandleData } from "../agents/core/technical-analysis.agent";
 import { advancedRiskManagementAgent } from "../agents/risk/advanced-risk-management.agent";
+import { enhancedPositionSizingService } from "./enhanced-position-sizing.service";
 
 export interface EnhancedBotEvaluationResult {
   success: boolean;
@@ -1201,62 +1202,63 @@ export class EnhancedBotEvaluationService {
     riskWarnings: string[];
   }> {
     try {
-      if (!committeeDecision.shouldTrade) {
-        return {
-          stopLoss: 0,
-          takeProfit: 0,
-          positionSize: 0,
-          riskRewardRatio: 0,
-          riskManagementReasoning: "No trade recommended by committee",
-          riskConfidence: 0,
-          riskWarnings: [],
-        };
-      }
+      logger.info(`🎯 Risk Management Agent analyzing ${bot.tradingPairSymbol} ${bot.timeframe}`);
 
-      // Calculate ATR from recent candle data
+      // Calculate ATR and other technical indicators
       const atr = this.calculateATR(candleData);
-
-      // Extract support/resistance levels from technical analysis
-      const supportResistanceLevels = this.extractSupportResistanceLevels(
+      const supportResistance = this.extractSupportResistanceLevels(
         committeeDecision.technicalAnalysis,
         candleData,
         currentPrice,
       );
-
-      // Calculate recent volatility
-      const recentVolatility = this.calculateRecentVolatility(candleData);
-
-      // Determine market structure
+      const volatility = this.calculateRecentVolatility(candleData);
       const marketStructure = this.determineMarketStructure(
         committeeDecision.technicalAnalysis,
         candleData,
       );
 
-      // Prepare input for Risk Management Agent
+      // Prepare risk management input
       const riskInput = {
         symbol: bot.tradingPairSymbol,
-        timeframe: bot.timeframe || "1m",
+        timeframe: bot.timeframe,
         entryPrice: currentPrice,
-        direction: committeeDecision.decision === "BUY" ? "BUY" : ("SELL" as "BUY" | "SELL"),
-        accountBalance: portfolioContext.accountBalance || 10000,
-        riskPercentage: 2, // 2% risk per trade
-        candleData: candleData,
-        atr: atr,
-        supportResistanceLevels: supportResistanceLevels,
-        recentVolatility: recentVolatility,
-        marketStructure: marketStructure,
+        direction: committeeDecision.decision,
+        accountBalance: portfolioContext?.accountBalance || 1000,
+        riskPercentage: bot.maxRiskPercentage || 2,
+        candleData,
+        atr,
+        supportResistanceLevels: supportResistance,
+        recentVolatility: volatility,
+        marketStructure,
       };
 
+      // Get risk management result
+      const riskResult = await advancedRiskManagementAgent.analyze(riskInput);
+
+      // Calculate enhanced position sizing options
+      const positionSizingOptions =
+        await enhancedPositionSizingService.calculatePositionSizingOptions({
+          accountBalance: portfolioContext?.accountBalance || 1000,
+          symbol: bot.tradingPairSymbol,
+          entryPrice: currentPrice,
+          stopLoss: riskResult.stopLoss,
+          riskPercentage: bot.maxRiskPercentage || 2,
+          timeframe: bot.timeframe,
+          volatility: volatility,
+        });
+
+      // Use the recommended position size from the enhanced service
+      const finalPositionSize = positionSizingOptions.recommended;
+
       logger.info(
-        `🎯 Calling Advanced Risk Management Agent for ${bot.tradingPairSymbol} ${bot.timeframe}`,
+        `✅ Risk Management: SL=${riskResult.stopLoss}, TP=${riskResult.takeProfit}, RR=${riskResult.riskRewardRatio}`,
       );
-
-      // Call the Advanced Risk Management Agent
-      const riskResult = await advancedRiskManagementAgent.calculateOptimalRiskLevels(riskInput);
-
-      logger.info(`✅ Advanced Risk Management Result:`);
-      logger.info(`   SL: ${riskResult.stopLoss} | TP: ${riskResult.takeProfit}`);
-      logger.info(`   RR: ${riskResult.riskRewardRatio}:1 | Confidence: ${riskResult.confidence}`);
+      logger.info(`📊 Position Sizing Options:`, {
+        conservative: positionSizingOptions.conservative,
+        moderate: positionSizingOptions.moderate,
+        aggressive: positionSizingOptions.aggressive,
+        recommended: positionSizingOptions.recommended,
+      });
       logger.info(`   Reasoning: ${riskResult.reasoning}`);
 
       if (riskResult.warnings.length > 0) {
@@ -1266,9 +1268,9 @@ export class EnhancedBotEvaluationService {
       return {
         stopLoss: riskResult.stopLoss,
         takeProfit: riskResult.takeProfit,
-        positionSize: riskResult.positionSize,
+        positionSize: finalPositionSize,
         riskRewardRatio: riskResult.riskRewardRatio,
-        riskManagementReasoning: riskResult.reasoning,
+        riskManagementReasoning: `${riskResult.reasoning}\n\nPosition Sizing: ${positionSizingOptions.reasoning}`,
         riskConfidence: riskResult.confidence,
         riskWarnings: riskResult.warnings,
       };

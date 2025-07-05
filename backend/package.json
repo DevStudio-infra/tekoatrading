@@ -16,6 +16,12 @@
     "db:reset-and-seed": "node scripts/reset-and-seed.js",
     "db:seed-trading-pairs": "node scripts/seed-trading-pairs.js",
     "encrypt-credentials": "node scripts/encrypt-existing-credentials.js",
+    "test:capital": "tsx src/tests/run-capital-tests.ts",
+    "test:quick": "tsx src/tests/quick-capital-test.ts",
+    "test:comprehensive": "tsx src/tests/comprehensive-order-tests.ts",
+    "test:broker-rejection": "tsx src/tests/broker-rejection-test.ts",
+    "test:sequential-validation": "tsx src/tests/sequential-validation-test.ts",
+    "test:order-intelligence": "tsx src/tests/order-intelligence-test.ts",
     "lint": "eslint src --ext .ts,.tsx",
     "lint:fix": "eslint src --ext .ts,.tsx --fix"
   },

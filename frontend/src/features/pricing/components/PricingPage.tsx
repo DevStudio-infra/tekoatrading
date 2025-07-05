@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/features/shared/components/ui/card";
+import { useTranslations } from "next-intl";
+import { useParams } from "next/navigation";
 import { Button } from "@/features/shared/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/features/shared/components/ui/card";
 import { Badge } from "@/features/shared/components/ui/badge";
 import { Slider } from "@/features/shared/components/ui/slider";
-import { CheckCircle, Zap, Star, CreditCard, Users, BarChart3, Headphones } from "lucide-react";
+import { Star, CreditCard, Zap } from "lucide-react";
 import { toast } from "sonner";
 
 interface PricingPlan {
@@ -13,7 +15,6 @@ interface PricingPlan {
   price: number;
   yearlyPrice?: number;
   billingCycle: string;
-  features: string[];
   credits: {
     monthly: number;
     cumulative: boolean;
@@ -39,15 +40,19 @@ interface PricingData {
 }
 
 const PricingPage = () => {
-  const [pricingData, setPricingData] = useState<PricingData | null>(null);
+  const t = useTranslations("pricing");
+  const params = useParams();
+  const locale = params.locale || "en";
+
   const [loading, setLoading] = useState(true);
+  const [pricingData, setPricingData] = useState<PricingData | null>(null);
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
   const [processingCheckout, setProcessingCheckout] = useState<string | null>(null);
-  const [userSubscription, setUserSubscription] = useState<"FREE" | "PRO">("FREE");
 
-  // Slider state
+  // Credit purchase state
   const [creditAmount, setCreditAmount] = useState([100]);
   const [purchasingCredits, setPurchasingCredits] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<"free" | "pro">("pro");
 
   useEffect(() => {
     fetchPricingData();
@@ -55,565 +60,407 @@ const PricingPage = () => {
 
   const fetchPricingData = async () => {
     try {
-      const response = await fetch("/api/stripe/pricing");
-      const data = await response.json();
+      setLoading(true);
+      // Mock pricing data since API might not be available
+      const mockData: PricingData = {
+        plans: [
+          {
+            name: t("plans.free.name"),
+            price: 0,
+            billingCycle: "monthly",
+            credits: {
+              monthly: 20,
+              cumulative: false,
+              additionalPrice: 0.05,
+            },
+          },
+          {
+            name: t("plans.pro.name"),
+            price: 19.99,
+            yearlyPrice: 203.89,
+            billingCycle: "monthly",
+            credits: {
+              monthly: 2000,
+              cumulative: true,
+              additionalPrice: 0.01,
+            },
+            popular: true,
+          },
+        ],
+        creditPricing: {
+          userType: "mixed",
+          pricePerCredit: 0.05,
+          minCredits: 50,
+          maxCredits: 5000,
+          examples: [
+            { credits: 100, price: "5.00" },
+            { credits: 500, price: "25.00" },
+            { credits: 1000, price: "50.00" },
+          ],
+        },
+      };
 
-      if (data.success) {
-        setPricingData(data.data);
-      }
+      setPricingData(mockData);
     } catch (error) {
-      console.error("Failed to load pricing data:", error);
+      console.error("Error fetching pricing data:", error);
+      toast.error(t("errors.loadFailed"));
     } finally {
       setLoading(false);
     }
   };
 
   const handleSubscriptionCheckout = async (billingCycle: "monthly" | "yearly") => {
-    setProcessingCheckout(billingCycle);
-
     try {
-      const response = await fetch("/api/stripe/create-subscription-checkout", {
+      setProcessingCheckout(billingCycle);
+      const response = await fetch("/api/stripe/create-checkout-session", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email: "user@example.com", // Replace with actual user email
-          billingCycle: billingCycle.toUpperCase(),
-          successUrl: `${window.location.origin}/dashboard?checkout=success`,
-          cancelUrl: `${window.location.origin}/pricing?checkout=canceled`,
+          priceId: billingCycle === "yearly" ? "price_yearly_id" : "price_monthly_id",
+          billingCycle,
         }),
       });
 
-      const data = await response.json();
+      if (!response.ok) throw new Error("Failed to create checkout session");
 
-      if (data.success) {
-        window.location.href = data.data.checkoutUrl;
-      } else {
-        toast.error("Failed to create checkout session");
-      }
+      const { url } = await response.json();
+      window.location.href = url;
     } catch (error) {
-      console.error("Checkout error:", error);
-      toast.error("Failed to process checkout");
+      console.error("Error creating checkout session:", error);
+      toast.error(t("errors.checkoutFailed"));
     } finally {
       setProcessingCheckout(null);
     }
   };
 
   const handleCreditPurchase = async () => {
-    setPurchasingCredits(true);
-
     try {
-      const response = await fetch("/api/stripe/create-credit-payment", {
+      setPurchasingCredits(true);
+      const response = await fetch("/api/stripe/purchase-credits", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          creditAmount: creditAmount[0],
-          email: "user@example.com", // Replace with actual user email
+          credits: creditAmount[0],
+          planType: selectedPlan,
         }),
       });
 
-      const data = await response.json();
+      if (!response.ok) throw new Error("Failed to purchase credits");
 
-      if (data.success) {
-        // Redirect to payment or show success message
-        toast.success(`Created payment for ${creditAmount[0]} credits`);
-        // In a real app, you'd integrate with Stripe Elements here
-      } else {
-        toast.error("Failed to create credit payment");
-      }
+      const { url } = await response.json();
+      window.location.href = url;
     } catch (error) {
-      console.error("Credit purchase error:", error);
-      toast.error("Failed to process credit purchase");
+      console.error("Error purchasing credits:", error);
+      toast.error(t("errors.purchaseFailed"));
     } finally {
       setPurchasingCredits(false);
     }
   };
 
-  const calculateCreditPrice = (credits: number) => {
-    if (!pricingData) return "0.00";
-    // Use pricing based on subscription type
-    const pricePerCredit = userSubscription === "PRO" ? 0.01 : 0.05;
+  // Calculate credit price based on selected plan
+  const calculateCreditPrice = (credits: number, planType: "free" | "pro" = selectedPlan) => {
+    const pricePerCredit = planType === "pro" ? 0.01 : 0.05;
     return (credits * pricePerCredit).toFixed(2);
-  };
-
-  const calculateTotalPrice = (basePrice: number, credits: number) => {
-    const creditPrice = parseFloat(calculateCreditPrice(credits));
-    return (basePrice + creditPrice).toFixed(2);
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-screen bg-background">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading pricing information...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">{t("loading")}</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-12">
-      {/* Header */}
-      <div className="text-center mb-12">
-        <h1 className="text-4xl font-bold text-gray-900 mb-4">
-          Choose Your <span className="text-blue-600">Trading Plan</span>
-        </h1>
-        <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-          Power up your trading strategy with AI-driven bot evaluations. Start free or go Pro for
-          advanced features.
-        </p>
-      </div>
-
-      {/* Billing Toggle */}
-      <div className="flex justify-center mb-12">
-        <div className="bg-gray-100 p-1 rounded-lg">
-          <button
-            onClick={() => setBillingCycle("monthly")}
-            className={`px-6 py-2 rounded-md text-sm font-medium transition-colors ${
-              billingCycle === "monthly"
-                ? "bg-white text-gray-900 shadow-sm"
-                : "text-gray-600 hover:text-gray-900"
-            }`}
-          >
-            Monthly
-          </button>
-          <button
-            onClick={() => setBillingCycle("yearly")}
-            className={`px-6 py-2 rounded-md text-sm font-medium transition-colors ${
-              billingCycle === "yearly"
-                ? "bg-white text-gray-900 shadow-sm"
-                : "text-gray-600 hover:text-gray-900"
-            }`}
-          >
-            Yearly
-            <Badge className="ml-2 bg-green-100 text-green-800">Save 15%</Badge>
-          </button>
-        </div>
-      </div>
-
-      {/* Pricing Plans */}
-      <div className="grid md:grid-cols-2 gap-8 mb-16">
-        {pricingData?.plans.map((plan, index) => (
-          <Card
-            key={index}
-            className={`relative ${plan.popular ? "border-blue-500 shadow-lg" : ""}`}
-          >
-            {plan.popular && (
-              <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
-                <Badge className="bg-blue-600 text-white px-4 py-1">
-                  <Star className="w-4 h-4 mr-1" />
-                  Most Popular
-                </Badge>
-              </div>
-            )}
-            <CardHeader className="text-center pb-6">
-              <CardTitle className="text-2xl font-bold">{plan.name}</CardTitle>
-              <div className="mt-4">
-                <span className="text-4xl font-bold text-gray-900">
-                  ${billingCycle === "yearly" && plan.yearlyPrice ? plan.yearlyPrice : plan.price}
-                </span>
-                <span className="text-gray-600 ml-2">
-                  {plan.price === 0 ? "forever" : `/${billingCycle}`}
-                </span>
-              </div>
-              {billingCycle === "yearly" && plan.yearlyPrice && (
-                <p className="text-sm text-green-600 mt-2">
-                  Save ${(plan.price * 12 - plan.yearlyPrice).toFixed(2)} per year
-                </p>
-              )}
-            </CardHeader>
-            <CardContent>
-              <ul className="space-y-3 mb-6">
-                {plan.features.map((feature, i) => (
-                  <li key={i} className="flex items-center">
-                    <CheckCircle className="w-5 h-5 text-green-500 mr-3" />
-                    <span className="text-gray-700">{feature}</span>
-                  </li>
-                ))}
-              </ul>
-              <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-                <p className="text-sm text-gray-600 mb-2">Credit Details:</p>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">{plan.credits.monthly} credits/month</span>
-                  <Badge variant="outline">
-                    {plan.credits.cumulative ? "Cumulative" : "Monthly Reset"}
-                  </Badge>
-                </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  Additional credits: ${plan.credits.additionalPrice.toFixed(2)} each
-                </p>
-              </div>
-              <Button
-                onClick={() => plan.price > 0 && handleSubscriptionCheckout(billingCycle)}
-                disabled={processingCheckout === billingCycle}
-                className={`w-full ${
-                  plan.popular
-                    ? "bg-blue-600 hover:bg-blue-700 text-white"
-                    : "bg-gray-900 hover:bg-gray-800 text-white"
-                }`}
-              >
-                {processingCheckout === billingCycle ? (
-                  <div className="flex items-center">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    Processing...
-                  </div>
-                ) : plan.price === 0 ? (
-                  "Get Started Free"
-                ) : (
-                  `Get ${plan.name} Plan`
-                )}
-              </Button>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Pricing Breakdown Section */}
-      <div className="max-w-4xl mx-auto mb-16">
-        <div className="text-center mb-8">
-          <h2 className="text-3xl font-bold text-gray-900 mb-4">Complete Pricing Breakdown</h2>
-          <p className="text-gray-600 mb-6">
-            See exactly what you're paying for with our transparent pricing
-          </p>
+    <div className="min-h-screen bg-background">
+      <div className="max-w-6xl mx-auto px-4 py-12">
+        {/* Header */}
+        <div className="text-center mb-12">
+          <h1 className="text-4xl font-bold mb-4">{t("title")}</h1>
+          <p className="text-xl text-muted-foreground max-w-2xl mx-auto">{t("subtitle")}</p>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-8">
-          {/* Monthly vs Yearly Comparison */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-center">Pro Plan Comparison</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center p-4 bg-gray-50 rounded-lg">
-                  <div>
-                    <p className="font-semibold">Monthly Plan</p>
-                    <p className="text-sm text-gray-600">$19.99/month</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-2xl font-bold text-gray-900">$19.99</p>
-                    <p className="text-sm text-gray-600">per month</p>
-                  </div>
-                </div>
-
-                <div className="flex justify-between items-center p-4 bg-green-50 rounded-lg border-2 border-green-200">
-                  <div>
-                    <p className="font-semibold text-green-800">Yearly Plan</p>
-                    <p className="text-sm text-green-600">$203.89/year</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-2xl font-bold text-green-800">$16.99</p>
-                    <p className="text-sm text-green-600">per month</p>
-                  </div>
-                </div>
-
-                <div className="text-center p-4 bg-blue-50 rounded-lg">
-                  <p className="text-lg font-semibold text-blue-800">
-                    Save $36.00 per year with yearly billing!
-                  </p>
-                  <p className="text-sm text-blue-600 mt-1">That&apos;s 15% off the monthly rate</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Credit Pricing by Plan */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-center">Credit Pricing</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center p-4 bg-gray-50 rounded-lg">
-                  <div>
-                    <p className="font-semibold">Free Plan</p>
-                    <p className="text-sm text-gray-600">20 credits/month included</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-2xl font-bold text-gray-900">$0.05</p>
-                    <p className="text-sm text-gray-600">per additional credit</p>
-                  </div>
-                </div>
-
-                <div className="flex justify-between items-center p-4 bg-blue-50 rounded-lg">
-                  <div>
-                    <p className="font-semibold text-blue-800">Pro Plan</p>
-                    <p className="text-sm text-blue-600">2,000 credits/month included</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-2xl font-bold text-blue-800">$0.01</p>
-                    <p className="text-sm text-blue-600">per additional credit</p>
-                  </div>
-                </div>
-
-                <div className="text-center p-4 bg-green-50 rounded-lg">
-                  <p className="text-lg font-semibold text-green-800">
-                    5x cheaper credits with Pro!
-                  </p>
-                  <p className="text-sm text-green-600 mt-1">Save 80% on additional credits</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-
-      {/* Credit Purchase Section */}
-      <div className="text-center mb-8">
-        <h2 className="text-3xl font-bold text-gray-900 mb-4">Need More Credits?</h2>
-        <p className="text-gray-600 mb-6">
-          Purchase additional credits at any time with our flexible pricing
-        </p>
-
-        {/* Subscription Type Display */}
-        <div className="flex justify-center mb-8">
-          <div className="bg-gray-100 p-1 rounded-lg">
+        {/* Billing Toggle */}
+        <div className="flex justify-center mb-12">
+          <div className="bg-muted p-1 rounded-lg">
             <button
-              onClick={() => setUserSubscription("FREE")}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                userSubscription === "FREE"
-                  ? "bg-white text-gray-900 shadow-sm"
-                  : "text-gray-600 hover:text-gray-900"
+              onClick={() => setBillingCycle("monthly")}
+              className={`px-6 py-2 rounded-md text-sm font-medium transition-colors ${
+                billingCycle === "monthly"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              Free User ($0.05/credit)
+              {t("billingCycle.monthly")}
             </button>
             <button
-              onClick={() => setUserSubscription("PRO")}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                userSubscription === "PRO"
-                  ? "bg-white text-gray-900 shadow-sm"
-                  : "text-gray-600 hover:text-gray-900"
+              onClick={() => setBillingCycle("yearly")}
+              className={`px-6 py-2 rounded-md text-sm font-medium transition-colors ${
+                billingCycle === "yearly"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              Pro User ($0.01/credit)
+              {t("billingCycle.yearly")}
+              <Badge className="ml-2 bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100">
+                {t("billingCycle.save")}
+              </Badge>
             </button>
           </div>
         </div>
-      </div>
 
-      {/* Subscription + Credits Calculator */}
-      <div className="max-w-4xl mx-auto mb-16">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-center text-2xl">Complete Order Summary</CardTitle>
-            <p className="text-center text-gray-600">
-              See your total monthly and yearly costs with Pro subscription + additional credits
-            </p>
-          </CardHeader>
-          <CardContent>
-            <div className="grid md:grid-cols-2 gap-8">
-              {/* Monthly Total */}
-              <div className="space-y-6">
-                <h3 className="text-xl font-semibold text-center">Monthly Total</h3>
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium">Pro Subscription</span>
-                    <span className="text-lg font-semibold">$19.99</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium">
-                      Additional Credits ({creditAmount[0]})
-                    </span>
-                    <span className="text-lg font-semibold">
-                      ${calculateCreditPrice(creditAmount[0])}
-                    </span>
-                  </div>
-                  <div className="border-t pt-4">
-                    <div className="flex justify-between items-center">
-                      <span className="text-lg font-semibold">Total Monthly</span>
-                      <span className="text-2xl font-bold text-primary">
-                        ${calculateTotalPrice(19.99, creditAmount[0])}
-                      </span>
+        {/* Pricing Plans */}
+        <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto mb-20">
+          {pricingData?.plans.map((plan, index) => (
+            <Card
+              key={index}
+              className={`relative ${plan.popular ? "border-primary shadow-lg scale-105" : ""}`}
+            >
+              {plan.popular && (
+                <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
+                  <Badge className="bg-primary text-primary-foreground px-4 py-1">
+                    <Star className="w-4 h-4 mr-1" />
+                    {t("plans.pro.popular")}
+                  </Badge>
+                </div>
+              )}
+              <CardHeader className="text-center pb-6">
+                <CardTitle className="text-2xl font-bold">{plan.name}</CardTitle>
+                <div className="mt-4">
+                  {plan.price === 0 ? (
+                    <div>
+                      <span className="text-4xl font-bold">{t("plans.free.price")}</span>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {t("plans.free.description")}
+                      </p>
                     </div>
+                  ) : (
+                    <div>
+                      {billingCycle === "yearly" && plan.yearlyPrice ? (
+                        <div>
+                          <span className="text-4xl font-bold">{t("plans.pro.yearlyPrice")}</span>
+                          <span className="text-muted-foreground ml-2">
+                            {t("plans.pro.perMonth")}
+                          </span>
+                          <p className="text-sm text-green-600 dark:text-green-400 mt-1">
+                            {t("plans.pro.billedAnnually", { price: plan.yearlyPrice })}
+                          </p>
+                          <p className="text-xs text-green-600 dark:text-green-400">
+                            {t("plans.pro.saveAmount", {
+                              amount: (plan.price * 12 - plan.yearlyPrice).toFixed(2),
+                            })}
+                          </p>
+                        </div>
+                      ) : (
+                        <div>
+                          <span className="text-4xl font-bold">{t("plans.pro.monthlyPrice")}</span>
+                          <span className="text-muted-foreground ml-2">
+                            {t("plans.pro.perMonth")}
+                          </span>
+                          {plan.yearlyPrice && (
+                            <p className="text-sm text-muted-foreground mt-1">
+                              {t("plans.pro.orYearlyHint", {
+                                price: (plan.yearlyPrice / 12).toFixed(2),
+                              })}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent>
+                {/* Credit Information */}
+                <div className="space-y-6">
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-primary mb-2">
+                      {plan.credits.monthly.toLocaleString()}
+                    </div>
+                    <p className="text-muted-foreground">{t("credits.perMonth")}</p>
+                    {plan.credits.cumulative && (
+                      <p className="text-sm text-green-600 dark:text-green-400 mt-1">
+                        {t("credits.rollover")}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="bg-muted rounded-lg p-4">
+                    <div className="text-center">
+                      <div className="text-lg font-semibold mb-1">
+                        ${plan.credits.additionalPrice.toFixed(2)}
+                      </div>
+                      <p className="text-sm text-muted-foreground">{t("credits.additional")}</p>
+                    </div>
+                  </div>
+
+                  <Button
+                    onClick={() => plan.price > 0 && handleSubscriptionCheckout(billingCycle)}
+                    disabled={processingCheckout === billingCycle}
+                    className={`w-full ${
+                      plan.popular
+                        ? "bg-primary hover:bg-primary/90 text-primary-foreground"
+                        : "bg-secondary hover:bg-secondary/80 text-secondary-foreground"
+                    }`}
+                    size="lg"
+                  >
+                    {processingCheckout === billingCycle ? (
+                      <div className="flex items-center">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2"></div>
+                        {t("creditPurchase.processing")}
+                      </div>
+                    ) : plan.price === 0 ? (
+                      t("plans.free.button")
+                    ) : (
+                      t("plans.pro.button")
+                    )}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Credit Purchase Section */}
+        <div className="max-w-3xl mx-auto mb-16">
+          <div className="text-center mb-8">
+            <h2 className="text-3xl font-bold mb-4">
+              <CreditCard className="w-8 h-8 inline-block mr-2" />
+              {t("creditPurchase.title")}
+            </h2>
+            <p className="text-muted-foreground">{t("creditPurchase.subtitle")}</p>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <div className="text-center">
+                <CardTitle className="text-xl mb-4">{t("creditPurchase.purchaseTitle")}</CardTitle>
+
+                {/* Plan Selection */}
+                <div className="flex justify-center mb-6">
+                  <div className="bg-muted p-1 rounded-lg">
+                    <button
+                      onClick={() => setSelectedPlan("free")}
+                      className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                        selectedPlan === "free"
+                          ? "bg-background text-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {t("creditPurchase.planSelection.free")}
+                    </button>
+                    <button
+                      onClick={() => setSelectedPlan("pro")}
+                      className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                        selectedPlan === "pro"
+                          ? "bg-background text-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {t("creditPurchase.planSelection.pro")}
+                    </button>
                   </div>
                 </div>
               </div>
-
-              {/* Yearly Total */}
+            </CardHeader>
+            <CardContent>
               <div className="space-y-6">
-                <h3 className="text-xl font-semibold text-center">Yearly Total</h3>
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium">Pro Subscription (Yearly)</span>
-                    <span className="text-lg font-semibold">$203.89</span>
+                {/* Credit Amount Display */}
+                <div className="text-center">
+                  <div className="text-3xl font-bold text-primary mb-2">
+                    {creditAmount[0].toLocaleString()} {t("creditPurchase.creditAmount")}
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium">
-                      Additional Credits ({creditAmount[0] * 12})
-                    </span>
-                    <span className="text-lg font-semibold">
-                      ${calculateCreditPrice(creditAmount[0] * 12)}
-                    </span>
-                  </div>
-                  <div className="border-t pt-4">
-                    <div className="flex justify-between items-center">
-                      <span className="text-lg font-semibold">Total Yearly</span>
-                      <span className="text-2xl font-bold text-primary">
-                        ${calculateTotalPrice(203.89, creditAmount[0] * 12)}
-                      </span>
-                    </div>
-                    <div className="text-center mt-2">
-                      <span className="text-sm text-green-600 font-medium">
-                        Save $
-                        {(
-                          calculateTotalPrice(19.99, creditAmount[0]) * 12 -
-                          calculateTotalPrice(203.89, creditAmount[0] * 12)
-                        ).toFixed(2)}{" "}
-                        per year!
-                      </span>
-                    </div>
-                  </div>
+                  <div className="text-2xl font-bold">${calculateCreditPrice(creditAmount[0])}</div>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    ${selectedPlan === "pro" ? "0.01" : "0.05"} per credit
+                  </p>
                 </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
 
-      {/* Credit Slider */}
-      <div className="max-w-2xl mx-auto">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-center">Purchase {creditAmount[0]} Credits</CardTitle>
-            <p className="text-center text-2xl font-bold text-blue-600">
-              ${calculateCreditPrice(creditAmount[0])}
-            </p>
-            <p className="text-center text-sm text-gray-600">
-              {userSubscription === "PRO" ? "$0.01" : "$0.05"} per credit
-            </p>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-6">
-              <div className="px-4">
-                <div className="flex justify-between text-sm text-gray-600 mb-2">
-                  <span>50 credits</span>
-                  <span>5,000 credits</span>
-                </div>
-                <Slider
-                  value={creditAmount}
-                  onValueChange={setCreditAmount}
-                  max={5000}
-                  min={50}
-                  step={10}
-                  className="w-full"
-                />
-                <div className="flex justify-center mt-4">
-                  <div className="flex space-x-2">
+                {/* Credit Slider */}
+                <div className="px-4">
+                  <div className="flex justify-between text-sm text-muted-foreground mb-2">
+                    <span>50</span>
+                    <span>5,000</span>
+                  </div>
+                  <Slider
+                    value={creditAmount}
+                    onValueChange={setCreditAmount}
+                    max={5000}
+                    min={50}
+                    step={10}
+                    className="w-full"
+                  />
+
+                  {/* Quick Select Buttons */}
+                  <div className="flex justify-center mt-4 flex-wrap gap-2">
                     {[100, 500, 1000, 2500, 5000].map((amount) => (
                       <button
                         key={amount}
                         onClick={() => setCreditAmount([amount])}
                         className={`px-3 py-1 rounded-full text-sm transition-colors ${
                           creditAmount[0] === amount
-                            ? "bg-blue-600 text-white"
-                            : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted text-muted-foreground hover:bg-muted/80"
                         }`}
                       >
-                        {amount}
+                        {amount.toLocaleString()}
                       </button>
                     ))}
                   </div>
                 </div>
-              </div>
 
-              <div className="border-t pt-4">
-                <div className="flex justify-between items-center mb-4">
-                  <span className="text-lg font-semibold">Total:</span>
-                  <span className="text-2xl font-bold text-blue-600">
-                    ${calculateCreditPrice(creditAmount[0])}
-                  </span>
-                </div>
+                {/* Purchase Button */}
                 <Button
                   onClick={handleCreditPurchase}
                   disabled={purchasingCredits}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                  className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
                   size="lg"
                 >
                   {purchasingCredits ? (
                     <div className="flex items-center">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                      Processing...
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2"></div>
+                      {t("creditPurchase.processing")}
                     </div>
                   ) : (
                     <>
-                      <CreditCard className="w-5 h-5 mr-2" />
-                      Purchase {creditAmount[0]} Credits
+                      <Zap className="w-5 h-5 mr-2" />
+                      {t("creditPurchase.purchaseButton", {
+                        amount: creditAmount[0].toLocaleString(),
+                        price: calculateCreditPrice(creditAmount[0]),
+                      })}
                     </>
                   )}
                 </Button>
               </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* FAQ Section */}
+        <div className="max-w-4xl mx-auto">
+          <h3 className="text-2xl font-bold text-center mb-8">{t("faq.title")}</h3>
+          <div className="grid md:grid-cols-2 gap-8">
+            <div>
+              <h4 className="font-semibold text-lg mb-2">{t("faq.credits.question")}</h4>
+              <p className="text-muted-foreground mb-4">{t("faq.credits.answer")}</p>
             </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* FAQ Section */}
-      <div className="mt-16 max-w-4xl mx-auto">
-        <h3 className="text-2xl font-bold text-center mb-8">Frequently Asked Questions</h3>
-        <div className="grid md:grid-cols-2 gap-8 text-left">
-          <div>
-            <h4 className="font-semibold text-lg mb-2">What are credits?</h4>
-            <p className="text-gray-600">
-              Credits are used to run bot evaluations. Each evaluation costs 1 credit. Free users
-              get 20 credits per month, Pro users get 2,000.
-            </p>
-          </div>
-
-          <div>
-            <h4 className="font-semibold text-lg mb-2">Can I change plans anytime?</h4>
-            <p className="text-gray-600">
-              Yes, you can upgrade or downgrade your plan at any time. Changes take effect
-              immediately.
-            </p>
-          </div>
-
-          <div>
-            <h4 className="font-semibold text-lg mb-2">Do unused credits expire?</h4>
-            <p className="text-gray-600">
-              Free plan credits reset monthly. Pro plan credits are cumulative and don&apos;t expire
-              while your subscription is active.
-            </p>
-          </div>
-
-          <div>
-            <h4 className="font-semibold text-lg mb-2">Why do Pro users get cheaper credits?</h4>
-            <p className="text-gray-600">
-              Pro users get a 5x discount on additional credits ($0.01 vs $0.05) as a benefit of
-              their subscription, encouraging more usage and better value.
-            </p>
-          </div>
-
-          <div>
-            <h4 className="font-semibold text-lg mb-2">How does the credit slider work?</h4>
-            <p className="text-gray-600">
-              Select any amount between 50-5,000 credits. The price automatically adjusts based on
-              your subscription type. No fixed packages - complete flexibility.
-            </p>
-          </div>
-
-          <div>
-            <h4 className="font-semibold text-lg mb-2">What payment methods do you accept?</h4>
-            <p className="text-gray-600">
-              We accept all major credit cards, debit cards, and digital wallets through our secure
-              Stripe integration.
-            </p>
+            <div>
+              <h4 className="font-semibold text-lg mb-2">{t("faq.planChange.question")}</h4>
+              <p className="text-muted-foreground mb-4">{t("faq.planChange.answer")}</p>
+            </div>
+            <div>
+              <h4 className="font-semibold text-lg mb-2">{t("faq.expiry.question")}</h4>
+              <p className="text-muted-foreground mb-4">{t("faq.expiry.answer")}</p>
+            </div>
+            <div>
+              <h4 className="font-semibold text-lg mb-2">{t("faq.cheaper.question")}</h4>
+              <p className="text-muted-foreground mb-4">{t("faq.cheaper.answer")}</p>
+            </div>
           </div>
         </div>
-      </div>
-
-      {/* Support Section */}
-      <div className="mt-16 bg-gray-50 rounded-lg p-8 text-center">
-        <Headphones className="w-12 h-12 text-blue-600 mx-auto mb-4" />
-        <h3 className="text-xl font-bold mb-2">Need Help?</h3>
-        <p className="text-gray-600 mb-4">
-          Our support team is here to help you choose the right plan and get started.
-        </p>
-        <Button variant="outline">Contact Support</Button>
       </div>
     </div>
   );

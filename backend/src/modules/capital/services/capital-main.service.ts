@@ -15,6 +15,8 @@ import {
   AccountDetails,
 } from "../interfaces/capital-position.interface";
 import { logger } from "../../../logger";
+import { brokerLimitValidator } from "../../../services/broker-limit-validator.service";
+import { tradingErrorLogger } from "../../../services/trading-error-logger.service";
 
 /**
  * Main Capital.com service that provides comprehensive trading functionality
@@ -197,13 +199,68 @@ export class CapitalMainService {
   ): Promise<DealConfirmation> {
     await this.ensureAuthenticated();
 
-    const request: CreatePositionRequest = {
+    // Get current market price for validation
+    let currentPrice: number;
+    try {
+      const priceData = await this.getLatestPrice(epic);
+      currentPrice = (priceData.bid + priceData.ask) / 2;
+    } catch (error) {
+      logger.warn(`⚠️ Could not get current price for ${epic}, using entry price for validation`);
+      currentPrice = stopLevel
+        ? direction === "BUY"
+          ? stopLevel * 1.01
+          : stopLevel * 0.99
+        : 100000; // Fallback
+    }
+
+    // Validate order parameters against broker limits
+    const orderParams = {
       epic,
       direction,
       size,
-      orderType: "MARKET",
+      entryPrice: currentPrice,
       stopLevel,
-      profitLevel: takeProfitLevel, // Use profitLevel instead of limitLevel for take profit
+      profitLevel: takeProfitLevel,
+    };
+
+    const validation = await brokerLimitValidator.validateOrder(
+      orderParams,
+      this,
+      "capital-service",
+    );
+
+    if (!validation.isValid) {
+      const errorMessage = `Order validation failed: ${validation.errors.join(", ")}`;
+      logger.error(`❌ ${errorMessage}`);
+
+      await tradingErrorLogger.logBrokerRejection({
+        botId: "capital-service",
+        symbol: epic,
+        errorCode: "validation.failed",
+        errorMessage,
+        requestData: orderParams,
+        brokerLimits: validation.brokerLimits,
+      });
+
+      throw new Error(errorMessage);
+    }
+
+    // Apply any adjustments from validation
+    const finalStopLevel = validation.adjustedStopLoss || stopLevel;
+    const finalProfitLevel = validation.adjustedTakeProfit || takeProfitLevel;
+    const finalSize = validation.adjustedPositionSize || size;
+
+    if (validation.warnings.length > 0) {
+      logger.warn(`🔧 Order adjustments for ${epic}:`, validation.warnings);
+    }
+
+    const request: CreatePositionRequest = {
+      epic,
+      direction,
+      size: finalSize,
+      orderType: "MARKET",
+      stopLevel: finalStopLevel,
+      profitLevel: finalProfitLevel, // Use profitLevel instead of limitLevel for take profit
       forceOpen: true,
       currencyCode: this.session?.currency || "USD",
     };
@@ -250,11 +307,55 @@ export class CapitalMainService {
       return response.data;
     } catch (error: any) {
       // Enhanced error logging for debugging 400 errors
-      console.log("❌ Capital.com Position Error:", {
+      const errorData = {
         status: error.response?.status,
         statusText: error.response?.statusText,
         data: error.response?.data,
         request: request,
+      };
+
+      console.log("❌ Capital.com Position Error:", errorData);
+
+      // Parse Capital.com error to extract real-time limits
+      const realTimeLimits = brokerLimitValidator.parseCapitalComError(error.response);
+
+      if (Object.keys(realTimeLimits).length > 0) {
+        logger.info(`🔧 Extracted real-time limits from Capital.com error:`, realTimeLimits);
+
+        // CRITICAL FIX: Force update the broker validator cache with real limits
+        await this.forceUpdateBrokerLimitsCache(epic, realTimeLimits);
+
+        // Check if we can auto-correct the order
+        const correctedOrder = await this.attemptOrderCorrection(request, realTimeLimits);
+        if (correctedOrder) {
+          logger.info(`🔄 Attempting order correction with real-time limits...`);
+          try {
+            const correctedResponse = await this.httpClient.post(
+              "/api/v1/positions",
+              correctedOrder,
+            );
+            logger.info(`✅ Order correction successful!`);
+
+            // CRITICAL FIX: Update validator cache AGAIN after successful correction
+            logger.info(`🔄 Updating broker limit cache for future trades...`);
+            await this.forceUpdateBrokerLimitsCache(epic, realTimeLimits);
+
+            return correctedResponse.data;
+          } catch (retryError: any) {
+            logger.warn(`⚠️ Order correction failed:`, retryError.message);
+          }
+        }
+      }
+
+      // Log the broker rejection error with detailed context
+      await tradingErrorLogger.logBrokerRejection({
+        botId: "capital-service",
+        symbol: epic,
+        errorCode: error.response?.data?.errorCode || "unknown.error",
+        errorMessage: error.response?.data?.errorMessage || error.message,
+        requestData: request,
+        responseData: error.response?.data,
+        brokerLimits: validation.brokerLimits,
       });
 
       logger.error(`Failed to create position for ${epic}:`, {
@@ -326,23 +427,74 @@ export class CapitalMainService {
   }
 
   /**
+   * Create a stop order
+   */
+  async createStopOrder(
+    epic: string,
+    direction: "BUY" | "SELL",
+    size: number,
+    level: number,
+    stopLevel?: number,
+    takeProfitLevel?: number,
+  ): Promise<DealConfirmation> {
+    await this.ensureAuthenticated();
+
+    try {
+      const request: CreateOrderRequest = {
+        epic,
+        direction,
+        size,
+        level,
+        type: "STOP",
+        stopLevel,
+        profitLevel: takeProfitLevel,
+        currencyCode: this.session?.currency || "USD",
+      };
+
+      const response = await this.httpClient.post("/api/v1/workingorders", request);
+      return response.data;
+    } catch (error: any) {
+      throw new Error(`Failed to create stop order: ${error.message}`);
+    }
+  }
+
+  /**
    * Close a position
    */
   async closePosition(dealId: string, size?: number): Promise<DealConfirmation> {
     await this.ensureAuthenticated();
 
     try {
-      const request = {
-        dealId,
-        direction: "CLOSE",
-        orderType: "MARKET",
-        size,
-      };
+      // Method 1: Try DELETE request (most common for Capital.com)
+      try {
+        const response = await this.httpClient.delete(`/api/v1/positions/${dealId}`);
+        return response.data;
+      } catch (deleteError: any) {
+        // If DELETE fails, try POST with close request
+        if (deleteError.response?.status === 405) {
+          logger.info(`🔄 DELETE failed, trying POST method for position close`);
 
-      const response = await this.httpClient.post("/api/v1/positions/close", request);
-      return response.data;
+          const request = {
+            dealId,
+            direction: "CLOSE",
+            orderType: "MARKET",
+            size,
+          };
+
+          const response = await this.httpClient.post("/api/v1/positions/close", request);
+          return response.data;
+        }
+        throw deleteError;
+      }
     } catch (error: any) {
-      throw new Error(`Failed to close position: ${error.message}`);
+      // Enhanced error logging for debugging
+      if (error.response?.status === 405) {
+        throw new Error(`Position close method not allowed - API endpoint may be incorrect`);
+      } else if (error.response?.status === 404) {
+        throw new Error(`Position ${dealId} not found or already closed`);
+      } else {
+        throw new Error(`Failed to close position: ${error.message}`);
+      }
     }
   }
 
@@ -371,6 +523,68 @@ export class CapitalMainService {
       return response.data?.market;
     } catch (error: any) {
       throw new Error(`Failed to get market data: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get real-time broker limits for a specific epic
+   */
+  async getBrokerLimits(epic: string): Promise<any> {
+    await this.ensureAuthenticated();
+
+    try {
+      const response = await this.httpClient.get(`/api/v1/markets/${epic}`);
+
+      // Extract broker limits from the response
+      const marketData = response.data;
+
+      if (marketData && marketData.dealingRules) {
+        return {
+          minPositionSize: marketData.dealingRules.minDealSize?.value || 0.001,
+          maxPositionSize: marketData.dealingRules.maxDealSize?.value || 10,
+          minStopDistance: marketData.dealingRules.minStopDistance?.value || 5,
+          maxStopDistance: marketData.dealingRules.maxStopDistance?.value || 5000,
+          minTakeProfitDistance: marketData.dealingRules.minProfitDistance?.value || 5,
+          maxTakeProfitDistance: marketData.dealingRules.maxProfitDistance?.value || 10000,
+          pipValue: marketData.dealingRules.pipValue || 1,
+          marginRequired: marketData.dealingRules.marginRequired || 0,
+          currentPrice: {
+            bid: marketData.snapshot?.bid,
+            ask: marketData.snapshot?.offer,
+          },
+        };
+      }
+
+      // Fallback to default limits if dealing rules not available
+      return {
+        minPositionSize: 0.001,
+        maxPositionSize: 10,
+        minStopDistance: 5,
+        maxStopDistance: 5000,
+        minTakeProfitDistance: 5,
+        maxTakeProfitDistance: 10000,
+        pipValue: 1,
+        marginRequired: 0,
+        currentPrice: {
+          bid: marketData.snapshot?.bid,
+          ask: marketData.snapshot?.offer,
+        },
+      };
+    } catch (error: any) {
+      logger.warn(`⚠️ Failed to get broker limits for ${epic}: ${error.message}`);
+
+      // Return safe default limits
+      return {
+        minPositionSize: 0.001,
+        maxPositionSize: 10,
+        minStopDistance: 5,
+        maxStopDistance: 5000,
+        minTakeProfitDistance: 5,
+        maxTakeProfitDistance: 10000,
+        pipValue: 1,
+        marginRequired: 0,
+        currentPrice: null,
+      };
     }
   }
 
@@ -1124,5 +1338,117 @@ export class CapitalMainService {
    */
   get isDemo(): boolean {
     return this.config.isDemo || false;
+  }
+
+  /**
+   * CRITICAL FIX: Force update broker limits cache with real-time limits
+   */
+  private async forceUpdateBrokerLimitsCache(epic: string, realTimeLimits: any): Promise<void> {
+    try {
+      // Get current broker limits
+      const currentLimits = await this.getBrokerLimits(epic);
+
+      // Merge real-time limits with current limits
+      const updatedLimits = { ...currentLimits, ...realTimeLimits };
+
+      // FORCE update the validator cache with the merged limits
+      brokerLimitValidator.forceUpdateCache(epic, updatedLimits);
+
+      logger.info(`🔄 FORCED broker limit cache update for ${epic}:`, {
+        maxStopPrice: updatedLimits.maxStopPrice,
+        minStopPrice: updatedLimits.minStopPrice,
+        currentPrice: updatedLimits.currentPrice,
+      });
+    } catch (error: any) {
+      logger.warn(`⚠️ Failed to force update broker limits for ${epic}:`, error.message);
+    }
+  }
+
+  /**
+   * Update broker limits cache with real-time limits from error response
+   */
+  private async updateBrokerLimitsFromError(epic: string, realTimeLimits: any): Promise<void> {
+    try {
+      // Get current broker limits
+      const currentLimits = await this.getBrokerLimits(epic);
+
+      // Merge real-time limits with current limits
+      const updatedLimits = { ...currentLimits, ...realTimeLimits };
+
+      // Update the cache in the broker validator
+      brokerLimitValidator.clearCache(); // Clear to force refresh
+
+      logger.info(`📊 Updated broker limits for ${epic} with real-time data`);
+    } catch (error: any) {
+      logger.warn(`⚠️ Failed to update broker limits for ${epic}:`, error.message);
+    }
+  }
+
+  /**
+   * Attempt to correct order parameters based on real-time limits
+   */
+  private async attemptOrderCorrection(
+    originalRequest: any,
+    realTimeLimits: any,
+  ): Promise<any | null> {
+    try {
+      const correctedRequest = { ...originalRequest };
+      let correctionsMade = false;
+
+      // Correct stop loss if needed with larger safety buffer
+      if (originalRequest.stopLevel && realTimeLimits.maxStopPrice) {
+        if (originalRequest.stopLevel > realTimeLimits.maxStopPrice) {
+          // Use larger buffer: 10 points for safety
+          correctedRequest.stopLevel = Number((realTimeLimits.maxStopPrice - 10).toFixed(5));
+          correctionsMade = true;
+          logger.info(
+            `🔧 Corrected stop loss (max): ${originalRequest.stopLevel} → ${correctedRequest.stopLevel} (buffer: 10 points below ${realTimeLimits.maxStopPrice})`,
+          );
+        }
+      }
+
+      if (originalRequest.stopLevel && realTimeLimits.minStopPrice) {
+        if (originalRequest.stopLevel < realTimeLimits.minStopPrice) {
+          // Use larger buffer: 10 points for safety
+          correctedRequest.stopLevel = Number((realTimeLimits.minStopPrice + 10).toFixed(5));
+          correctionsMade = true;
+          logger.info(
+            `🔧 Corrected stop loss (min): ${originalRequest.stopLevel} → ${correctedRequest.stopLevel} (buffer: 10 points above ${realTimeLimits.minStopPrice})`,
+          );
+        }
+      }
+
+      // Correct take profit if needed with larger safety buffer
+      if (originalRequest.profitLevel && realTimeLimits.maxTakeProfitPrice) {
+        if (originalRequest.profitLevel > realTimeLimits.maxTakeProfitPrice) {
+          // Use larger buffer: 10 points for safety
+          correctedRequest.profitLevel = Number(
+            (realTimeLimits.maxTakeProfitPrice - 10).toFixed(5),
+          );
+          correctionsMade = true;
+          logger.info(
+            `🔧 Corrected take profit (max): ${originalRequest.profitLevel} → ${correctedRequest.profitLevel} (buffer: 10 points below ${realTimeLimits.maxTakeProfitPrice})`,
+          );
+        }
+      }
+
+      if (originalRequest.profitLevel && realTimeLimits.minTakeProfitPrice) {
+        if (originalRequest.profitLevel < realTimeLimits.minTakeProfitPrice) {
+          // Use larger buffer: 10 points for safety
+          correctedRequest.profitLevel = Number(
+            (realTimeLimits.minTakeProfitPrice + 10).toFixed(5),
+          );
+          correctionsMade = true;
+          logger.info(
+            `🔧 Corrected take profit (min): ${originalRequest.profitLevel} → ${correctedRequest.profitLevel} (buffer: 10 points above ${realTimeLimits.minTakeProfitPrice})`,
+          );
+        }
+      }
+
+      return correctionsMade ? correctedRequest : null;
+    } catch (error: any) {
+      logger.warn(`⚠️ Failed to correct order parameters:`, error.message);
+      return null;
+    }
   }
 }

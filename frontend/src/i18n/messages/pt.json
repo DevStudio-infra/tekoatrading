@@ -2,6 +2,9 @@
   "common": {
     "home": "Início",
     "features": "Recursos",
+    "pricing": "Preços",
+    "contact": "Contato",
+    "faq": "FAQ",
     "dashboard": "Painel",
     "bots": "Bots de Trading",
     "portfolio": "Portfólio",
@@ -209,6 +212,76 @@
       "subtitle": "Junte-se a milhares de traders que confiam no nosso Comitê de Trading Profissional para gerenciar seus portfólios.",
       "start": "Começar a Negociar",
       "explore": "Explorar Plataforma"
+    }
+  },
+  "pricing": {
+    "title": "Preços Simples e Transparentes",
+    "subtitle": "Escolha o plano que se adequa aos seus objetivos de trading. Atualize ou rebaixe a qualquer momento.",
+    "loading": "Carregando informações de preços...",
+    "billingCycle": {
+      "monthly": "Mensal",
+      "yearly": "Anual",
+      "save": "Economize 15%"
+    },
+    "plans": {
+      "free": {
+        "name": "Grátis",
+        "price": "Grátis",
+        "description": "Para sempre",
+        "button": "Começar Grátis"
+      },
+      "pro": {
+        "name": "Pro",
+        "monthlyPrice": "$19.99",
+        "yearlyPrice": "$16.99",
+        "perMonth": "/mês",
+        "billedAnnually": "Faturado anualmente (${price}/ano)",
+        "saveAmount": "Economize ${amount} por ano",
+        "orYearlyHint": "Ou ${price}/mês faturado anualmente",
+        "button": "Escolher Pro",
+        "popular": "Mais Popular"
+      }
+    },
+    "credits": {
+      "perMonth": "Créditos por mês",
+      "rollover": "Créditos se acumulam mensalmente",
+      "additional": "Por crédito adicional"
+    },
+    "creditPurchase": {
+      "title": "Precisa de Mais Créditos?",
+      "subtitle": "Compre créditos adicionais a qualquer momento. Os preços dependem do seu plano atual.",
+      "purchaseTitle": "Comprar Créditos Adicionais",
+      "planSelection": {
+        "free": "Plano Grátis ($0.05/crédito)",
+        "pro": "Plano Pro ($0.01/crédito)"
+      },
+      "creditAmount": "Créditos",
+      "purchaseButton": "Comprar {amount} Créditos por ${price}",
+      "processing": "Processando..."
+    },
+    "faq": {
+      "title": "Perguntas Frequentes",
+      "credits": {
+        "question": "O que são créditos?",
+        "answer": "Créditos alimentam avaliações de bots. Cada avaliação usa 1 crédito. Usuários gratuitos recebem 20/mês, usuários Pro recebem 2.000/mês."
+      },
+      "planChange": {
+        "question": "Posso mudar de plano?",
+        "answer": "Sim! Atualize ou rebaixe a qualquer momento. Mudanças têm efeito imediato com faturamento proporcional."
+      },
+      "expiry": {
+        "question": "Os créditos expiram?",
+        "answer": "Créditos do plano gratuito resetam mensalmente. Créditos do plano Pro se acumulam e não expiram enquanto estiver ativo."
+      },
+      "cheaper": {
+        "question": "Por que os créditos Pro são mais baratos?",
+        "answer": "Assinantes Pro recebem créditos adicionais 5x mais baratos ($0.01 vs $0.05) como benefício de fidelidade."
+      }
+    },
+    "errors": {
+      "loadFailed": "Falha ao carregar dados de preços",
+      "checkoutFailed": "Falha ao iniciar processo de compra",
+      "purchaseFailed": "Falha ao comprar créditos"
     }
   }
 }
